@@ -40,7 +40,10 @@ impl Identity {
     pub fn generate() -> Self {
         let signing_key = SigningKey::generate(&mut OsRng);
         let x_secret = StaticSecret::random_from_rng(OsRng);
-        Identity { signing_key, x_secret }
+        Identity {
+            signing_key,
+            x_secret,
+        }
     }
 
     /// Derive the Darqual address for this identity.
@@ -97,23 +100,26 @@ impl Identity {
         ed_bytes.zeroize();
         x_bytes.zeroize();
 
-        Ok(Identity { signing_key, x_secret })
+        Ok(Identity {
+            signing_key,
+            x_secret,
+        })
     }
 
     /// Default identity path: ~/.darqual/identity.toml
     pub fn default_path() -> Result<PathBuf> {
-        let home = dirs::home_dir()
-            .ok_or_else(|| Error::Io(std::io::Error::new(
+        let home = dirs::home_dir().ok_or_else(|| {
+            Error::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 "could not determine home directory",
-            )))?;
+            ))
+        })?;
         Ok(home.join(".darqual").join("identity.toml"))
     }
 }
 
 fn decode_hex_32(s: &str) -> Result<[u8; 32]> {
-    let bytes = hex::decode(s)
-        .map_err(|e| Error::Encoding(format!("hex decode: {}", e)))?;
+    let bytes = hex::decode(s).map_err(|e| Error::Encoding(format!("hex decode: {}", e)))?;
     bytes
         .try_into()
         .map_err(|_| Error::Key("expected 32-byte seed".to_string()))

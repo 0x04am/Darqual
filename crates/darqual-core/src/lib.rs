@@ -143,7 +143,10 @@ mod tests {
 
         let loaded = Identity::load(&tmp).expect("load failed");
         assert_eq!(loaded.address(), original_address);
-        assert_eq!(loaded.signing_key.verifying_key().to_bytes(), original_ed_pub);
+        assert_eq!(
+            loaded.signing_key.verifying_key().to_bytes(),
+            original_ed_pub
+        );
         assert_eq!(
             x25519_dalek::PublicKey::from(&loaded.x_secret).to_bytes(),
             original_x_pub

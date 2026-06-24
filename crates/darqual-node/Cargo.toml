@@ -1,0 +1,17 @@
+[package]
+name = "darqual-node"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "darqual-node"
+path = "src/main.rs"
+
+[dependencies]
+darqual-core = { path = "../darqual-core" }
+darqual-net = { path = "../darqual-net" }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "time", "signal"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -3,7 +3,11 @@ use clap::{Parser, Subcommand};
 use darqual_core::{ContactCard, Identity, Lockbox};
 
 #[derive(Parser)]
-#[command(name = "darqual", version = "0.0.1", about = "Darqual — anonymous encrypted messenger")]
+#[command(
+    name = "darqual",
+    version = "0.0.1",
+    about = "Darqual — anonymous encrypted messenger"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -72,7 +76,8 @@ fn cmd_keygen(force: bool) -> Result<()> {
 
 fn cmd_address() -> Result<()> {
     let path = Identity::default_path().context("could not determine identity path")?;
-    let id = Identity::load(&path).context("failed to load identity — run `darqual keygen` first")?;
+    let id =
+        Identity::load(&path).context("failed to load identity — run `darqual keygen` first")?;
 
     println!("Address: {}", id.address());
     println!();
@@ -98,7 +103,8 @@ fn cmd_seal(to: &str, message: &str) -> Result<()> {
 
 fn cmd_open(lockbox: &str) -> Result<()> {
     let path = Identity::default_path().context("could not determine identity path")?;
-    let id = Identity::load(&path).context("failed to load identity — run `darqual keygen` first")?;
+    let id =
+        Identity::load(&path).context("failed to load identity — run `darqual keygen` first")?;
 
     match Lockbox::open(&id, lockbox) {
         Ok(plaintext) => {

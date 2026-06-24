@@ -25,7 +25,11 @@ struct ContactCardWire {
 
 impl ContactCard {
     pub fn new(address: DarqualAddress, ed_pub: [u8; 32], x_pub: [u8; 32]) -> Self {
-        ContactCard { address, ed_pub, x_pub }
+        ContactCard {
+            address,
+            ed_pub,
+            x_pub,
+        }
     }
 
     /// Verify that the address is correctly derived from ed_pub.
@@ -68,7 +72,11 @@ impl ContactCard {
         let ed_pub = decode_hex_32(&wire.ed_pub)?;
         let x_pub = decode_hex_32(&wire.x_pub)?;
 
-        Ok(ContactCard { address, ed_pub, x_pub })
+        Ok(ContactCard {
+            address,
+            ed_pub,
+            x_pub,
+        })
     }
 }
 
@@ -86,8 +94,7 @@ impl std::str::FromStr for ContactCard {
 }
 
 fn decode_hex_32(s: &str) -> Result<[u8; 32]> {
-    let bytes = hex::decode(s)
-        .map_err(|e| Error::Encoding(format!("hex decode: {}", e)))?;
+    let bytes = hex::decode(s).map_err(|e| Error::Encoding(format!("hex decode: {}", e)))?;
     bytes
         .try_into()
         .map_err(|_| Error::InvalidContactCard("expected 32-byte key".to_string()))

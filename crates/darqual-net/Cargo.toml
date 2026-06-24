@@ -1,0 +1,13 @@
+[package]
+name = "darqual-net"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+darqual-core = { path = "../darqual-core" }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "time"] }
+thiserror = "1"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "macros", "time", "sync"] }
