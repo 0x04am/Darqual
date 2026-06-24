@@ -1,0 +1,20 @@
+[package]
+name = "darqual-tor"
+version = "0.1.0"
+edition = "2021"
+description = "Darqual Tor transport (Arti onion services) — EXPERIMENTAL Stage 1 increment"
+
+# Standalone workspace — excluded from the main darqual workspace so the gated
+# verify.sh doesn't pay Arti's ~350-crate compile cost on every run.
+[workspace]
+
+[dependencies]
+arti-client = { version = "0.43", default-features = false, features = ["tokio", "rustls", "compression", "onion-service-client", "onion-service-service"] }
+tor-rtcompat = { version = "0.43", default-features = false, features = ["tokio", "rustls"] }
+tor-hsservice = "0.43"
+tor-cell = "0.43"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "net", "time"] }
+futures = "0.3"
+rustls = { version = "0.23", features = ["ring"] }
+tracing = "0.1"
+anyhow = "1"

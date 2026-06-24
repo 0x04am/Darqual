@@ -10,3 +10,6 @@ members = [
     "crates/darqual-cover",
 ]
 resolver = "2"
+# darqual-tor (Arti/Tor) is EXCLUDED from the gated workspace — its ~350-crate
+# dependency tree would make verify.sh take >5min. It builds standalone.
+exclude = ["crates/darqual-tor"]
