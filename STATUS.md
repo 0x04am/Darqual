@@ -21,8 +21,8 @@ independently before any claim.
 | 0 — Foundation (identity, lockbox, CLI) | v0.0.1 | ✅ DONE+TESTED | tag v0.0.1; 10 tests; verify.sh green; live Alice→Bob→Eve demo |
 | 1 — Transport (onion-to-onion) | v0.1.0 | ✅ DONE+TESTED (TCP) | tag v0.1.0; 2 net integration tests; verify.sh green; live two-daemon TCP demo (Alice→Bob recv, Eve rejected). Tor/Arti = v0.1.x next |
 | 2 — Ledger (epochs, hot-window) | v0.2.0 | ✅ DONE+TESTED | tag v0.2.0; 22 ledger tests; Merkle+proofs, hash-linked chain, trial-decrypt sweep verified |
-| 3 — Addressing & notification | v0.3.x | ⏳ RESUME HERE | dead-drop PRF labels (Pung) + Talek private-notification. Next dispatch. |
-| 4 — Write path + RLN spam | v0.4.x | ⬜ todo | — |
+| 3 — Addressing & notification | v0.3.0 | ✅ DONE+TESTED | tag v0.3.0; +8 tests; dead-drop labels (symmetric, per-epoch, unlinkable) + notify + fetch_open |
+| 4 — Write path + RLN spam | v0.4.x | ⏳ NEXT | PoW spam-gate (tractable) now; full RLN/DPF = advanced zk, documented-not-built |
 | 5 — Storage scaling (buckets, erasure, DA) | v0.5.x | ⬜ todo | — |
 | 6 — Committees (VRF) [NOVEL CORE] | v0.6.x | 🔬 research | unpublished question — will scaffold + document, not fake |
 | 7 — Discovery (Alpenhorn IBE) | v0.7.x | ⬜ todo | — |
