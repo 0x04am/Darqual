@@ -20,8 +20,8 @@ independently before any claim.
 |---|---|---|---|
 | 0 — Foundation (identity, lockbox, CLI) | v0.0.1 | ✅ DONE+TESTED | tag v0.0.1; 10 tests; verify.sh green; live Alice→Bob→Eve demo |
 | 1 — Transport (onion-to-onion) | v0.1.0 | ✅ DONE+TESTED (TCP) | tag v0.1.0; 2 net integration tests; verify.sh green; live two-daemon TCP demo (Alice→Bob recv, Eve rejected). Tor/Arti = v0.1.x next |
-| 2 — Ledger (epochs, hot-window) | v0.2.x | ⏳ NEXT | — |
-| 3 — Addressing & notification | v0.3.x | ⬜ todo | — |
+| 2 — Ledger (epochs, hot-window) | v0.2.0 | ✅ DONE+TESTED | tag v0.2.0; 22 ledger tests; Merkle+proofs, hash-linked chain, trial-decrypt sweep verified |
+| 3 — Addressing & notification | v0.3.x | ⏳ RESUME HERE | dead-drop PRF labels (Pung) + Talek private-notification. Next dispatch. |
 | 4 — Write path + RLN spam | v0.4.x | ⬜ todo | — |
 | 5 — Storage scaling (buckets, erasure, DA) | v0.5.x | ⬜ todo | — |
 | 6 — Committees (VRF) [NOVEL CORE] | v0.6.x | 🔬 research | unpublished question — will scaffold + document, not fake |
@@ -54,5 +54,43 @@ as far as it verifiably holds together — truth over theater.
 ---
 
 ## Build log
-- S218: Stage 0 shipped (v0.0.1). 11-stage task ladder created (#144–#153, epic #146).
-  Research corpus: ~/Jawz/notes/projects/anon-messenger-research/. verify.sh gate established.
+- S218 overnight (2026-06-24): Stages 0–2 shipped, tested, tagged.
+  - v0.0.1 Foundation — identity, lockboxes, CLI (10 tests)
+  - v0.1.0 Transport — TCP node-to-node + daemon (2 integration tests)
+  - v0.2.0 Ledger — epochs, Merkle, hot-window, trial-decrypt (22 tests)
+  - **34 tests total, all green.** verify.sh gate established + run before every commit.
+  - 11-stage task ladder (#144–#153, epic #146); research corpus in
+    ~/Jawz/notes/projects/anon-messenger-research/.
+- RESUME POINT: Stage 3 (#147) — dead-drop PRF labels (Pung) + Talek private notification.
+
+---
+
+## How to run the spine (end-to-end, today)
+```bash
+cd ~/Projects/darqual && cargo build
+DQ=target/debug/darqual; NODE=target/debug/darqual-node
+
+# 1. two identities
+HOME=/tmp/a $DQ keygen ; HOME=/tmp/b $DQ keygen
+BCARD=$(HOME=/tmp/b $DQ address | grep -o 'dqcard1[a-z0-9]*')
+
+# 2. OFFLINE lockbox (Stage 0): seal -> open
+BOX=$(HOME=/tmp/a $DQ seal --to "$BCARD" --message "hi bob" | grep -o 'dqbox1[A-Za-z0-9+/=]*')
+HOME=/tmp/b $DQ open --lockbox "$BOX"                 # -> "hi bob"
+
+# 3. OVER THE NETWORK (Stage 1): Bob listens, Alice sends
+HOME=/tmp/b $NODE listen --addr 127.0.0.1:19939 &     # in one terminal
+HOME=/tmp/a $NODE send --peer 127.0.0.1:19939 --to "$BCARD" --message "over the wire"
+#   Bob's listener prints:  [recv] over the wire
+
+# 4. THE LEDGER (Stage 2): see crates/darqual-ledger tests — build a block of
+#    lockboxes, Merkle-root it, trial-decrypt to surface only your messages.
+```
+Regression gate (run after ANY change): `./scripts/verify.sh`
+
+## What's NOT done (honest)
+- Stage 1 is TCP, not yet Tor — Arti/onion is the next transport increment (v0.1.x).
+- No anonymity-network properties yet (cover traffic, mixing, dead-drops, committees).
+  Stages 3–10 deliver those; 6 & 10 contain open-research + external-audit work that
+  cannot be finished autonomously. This is the SPINE, not the finished anonymity system.
+
