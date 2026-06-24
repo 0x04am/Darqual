@@ -13,7 +13,7 @@ pub use address::DarqualAddress;
 pub use contact::ContactCard;
 pub use conversation::Conversation;
 pub use error::{Error, Result};
-pub use identity::Identity;
+pub use identity::{verify_ed, Identity};
 pub use label::Label;
 pub use lockbox::Lockbox;
 pub use pow::{leading_zero_bits, mint as pow_mint, pow_hash, pow_valid, POW_DOMAIN};

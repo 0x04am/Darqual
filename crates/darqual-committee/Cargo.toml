@@ -1,0 +1,9 @@
+[package]
+name = "darqual-committee"
+version = "0.6.0"
+edition = "2021"
+
+[dependencies]
+darqual-core = { path = "../darqual-core" }
+blake3 = "1"
+thiserror = "1"

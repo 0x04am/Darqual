@@ -2,7 +2,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use ed25519_dalek::SigningKey;
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
@@ -106,6 +106,18 @@ impl Identity {
         })
     }
 
+    /// Sign `msg` with this identity's ed25519 signing key.
+    /// The signature is deterministic (RFC 8032 — no randomness needed).
+    pub fn sign(&self, msg: &[u8]) -> [u8; 64] {
+        let sig: Signature = self.signing_key.sign(msg);
+        sig.to_bytes()
+    }
+
+    /// The ed25519 public key (verifying key) bytes for this identity.
+    pub fn ed_pub(&self) -> [u8; 32] {
+        self.signing_key.verifying_key().to_bytes()
+    }
+
     /// Default identity path: ~/.darqual/identity.toml
     pub fn default_path() -> Result<PathBuf> {
         let home = dirs::home_dir().ok_or_else(|| {
@@ -123,4 +135,15 @@ fn decode_hex_32(s: &str) -> Result<[u8; 32]> {
     bytes
         .try_into()
         .map_err(|_| Error::Key("expected 32-byte seed".to_string()))
+}
+
+/// Verify an ed25519 `sig` over `msg` using the raw 32-byte compressed public key.
+/// Returns `false` on any error (bad key bytes, bad signature, or mismatch).
+pub fn verify_ed(ed_pub: &[u8; 32], msg: &[u8], sig: &[u8; 64]) -> bool {
+    let vk = match VerifyingKey::from_bytes(ed_pub) {
+        Ok(k) => k,
+        Err(_) => return false,
+    };
+    let signature = Signature::from_bytes(sig);
+    vk.verify(msg, &signature).is_ok()
 }

@@ -45,7 +45,8 @@ pub fn repair(enc: &mut Encoded, present: &mut [bool]) -> Result<()> {
         .collect();
 
     let rs = ReedSolomon::new(n_data, n_parity).map_err(|e| StorageError::Rs(e.to_string()))?;
-    rs.reconstruct(&mut opt_shards).map_err(|e| StorageError::Rs(e.to_string()))?;
+    rs.reconstruct(&mut opt_shards)
+        .map_err(|e| StorageError::Rs(e.to_string()))?;
 
     // Write reconstructed shards back into enc and mark present
     for (i, opt) in opt_shards.into_iter().enumerate() {
@@ -87,8 +88,14 @@ mod tests {
 
         repair(&mut enc, &mut present).unwrap();
 
-        assert!(present.iter().all(|&p| p), "all shards should be marked present after repair");
-        assert_eq!(enc.shards, original_shards, "repaired shards must match original encode output");
+        assert!(
+            present.iter().all(|&p| p),
+            "all shards should be marked present after repair"
+        );
+        assert_eq!(
+            enc.shards, original_shards,
+            "repaired shards must match original encode output"
+        );
     }
 
     #[test]
@@ -108,7 +115,10 @@ mod tests {
         }
 
         let result = repair(&mut enc, &mut present);
-        assert!(result.is_err(), "repair should fail when parity+1 shards are missing");
+        assert!(
+            result.is_err(),
+            "repair should fail when parity+1 shards are missing"
+        );
     }
 
     #[test]
@@ -121,6 +131,9 @@ mod tests {
 
         repair(&mut enc, &mut present).unwrap();
 
-        assert_eq!(enc.shards, shards_before, "no-op repair should not change shards");
+        assert_eq!(
+            enc.shards, shards_before,
+            "no-op repair should not change shards"
+        );
     }
 }

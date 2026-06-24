@@ -59,7 +59,8 @@ pub fn encode(data_bytes: &[u8], cfg: &ErasureConfig) -> Result<Encoded> {
 
     // RS encode — fills in the parity shards
     let rs = ReedSolomon::new(n_data, n_parity).map_err(|e| StorageError::Rs(e.to_string()))?;
-    rs.encode(&mut shards).map_err(|e| StorageError::Rs(e.to_string()))?;
+    rs.encode(&mut shards)
+        .map_err(|e| StorageError::Rs(e.to_string()))?;
 
     Ok(Encoded {
         shards,
@@ -99,7 +100,8 @@ pub fn reconstruct(enc: &Encoded, present: &[bool]) -> Result<Vec<u8>> {
         .collect();
 
     let rs = ReedSolomon::new(n_data, n_parity).map_err(|e| StorageError::Rs(e.to_string()))?;
-    rs.reconstruct(&mut opt_shards).map_err(|e| StorageError::Rs(e.to_string()))?;
+    rs.reconstruct(&mut opt_shards)
+        .map_err(|e| StorageError::Rs(e.to_string()))?;
 
     // Re-assemble from data shards only, trim padding
     let mut out: Vec<u8> = opt_shards
@@ -126,7 +128,10 @@ mod tests {
         let enc = encode(data, &cfg).unwrap();
         let present = vec![true; enc.shards.len()];
         let recovered = reconstruct(&enc, &present).unwrap();
-        assert_eq!(recovered, data, "roundtrip should return exact original bytes");
+        assert_eq!(
+            recovered, data,
+            "roundtrip should return exact original bytes"
+        );
     }
 
     #[test]
@@ -185,6 +190,9 @@ mod tests {
         present[2] = false; // 3 missing > parity(2)
 
         let result = reconstruct(&enc, &present);
-        assert!(result.is_err(), "should fail when parity+1 shards are missing");
+        assert!(
+            result.is_err(),
+            "should fail when parity+1 shards are missing"
+        );
     }
 }

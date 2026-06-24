@@ -79,8 +79,8 @@ pub fn sample<R: Rng>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
     use rand::rngs::SmallRng;
+    use rand::SeedableRng;
 
     fn make_shards(n: usize, fill: u8) -> Vec<Vec<u8>> {
         (0..n).map(|i| vec![(fill + i as u8) % 255; 32]).collect()

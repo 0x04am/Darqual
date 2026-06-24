@@ -322,6 +322,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "darqual-committee"
+version = "0.6.0"
+dependencies = [
+ "blake3",
+ "darqual-core",
+ "thiserror",
+]
+
+[[package]]
 name = "darqual-core"
 version = "0.0.1"
 dependencies = [
