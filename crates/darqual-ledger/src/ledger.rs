@@ -9,6 +9,8 @@ pub enum LedgerError {
     InvalidBlock,
     #[error("block chain linkage broken: expected prev_hash {expected}, got {got}")]
     BrokenChain { expected: String, got: String },
+    #[error("block rejected: one or more entries fail PoW at difficulty {0}")]
+    InvalidPoW(u32),
 }
 
 /// The hot-window ledger — a sliding window of recent epochs.
@@ -17,20 +19,37 @@ pub struct Ledger {
     blocks: Vec<Block>,
     /// Maximum number of blocks to retain.
     pub window: usize,
+    /// Minimum PoW difficulty required for every entry appended to this ledger.
+    /// `0` disables the check (back-compat / tests that don't care about PoW).
+    pub pow_difficulty: u32,
 }
 
 impl Ledger {
-    /// Create an empty ledger with a given hot-window size.
+    /// Create an empty ledger with a given hot-window size and no PoW requirement.
     pub fn new(window: usize) -> Self {
         Ledger {
             blocks: Vec::new(),
             window,
+            pow_difficulty: 0,
+        }
+    }
+
+    /// Create an empty ledger that enforces a minimum PoW difficulty on every entry.
+    pub fn new_with_pow(window: usize, pow_difficulty: u32) -> Self {
+        Ledger {
+            blocks: Vec::new(),
+            window,
+            pow_difficulty,
         }
     }
 
     /// Append a validated, chain-linked block.
     ///
-    /// Checks: block validates internally; prev_hash links to the tip.
+    /// Checks (in order):
+    /// 1. block Merkle root is internally consistent;
+    /// 2. `prev_hash` links to the current tip;
+    /// 3. every entry satisfies `self.pow_difficulty`.
+    ///
     /// Prunes to `self.window` blocks after a successful append.
     pub fn append(&mut self, block: Block) -> Result<(), LedgerError> {
         if !block.validate() {
@@ -43,6 +62,10 @@ impl Ledger {
                 expected: format!("{:x?}", expected_prev),
                 got: format!("{:x?}", block.header.prev_hash),
             });
+        }
+
+        if !block.validate_pow(self.pow_difficulty) {
+            return Err(LedgerError::InvalidPoW(self.pow_difficulty));
         }
 
         self.blocks.push(block);

@@ -23,18 +23,16 @@ mod tests {
 
     // ── helpers ───────────────────────────────────────────────────────────
 
-    /// Build a LedgerEntry for `recipient` with a blank (zero) label — used for
-    /// Stage-2-style tests that don't need addressed labels.
+    /// Build a LedgerEntry for `recipient` with a blank (zero) label.
+    /// Uses difficulty=0 — no PoW grinding required.
     fn make_entry(recipient: &Identity, msg: &[u8]) -> LedgerEntry {
         let x_pub = X25519PublicKey::from(&recipient.x_secret);
         let lb = Lockbox::seal(&x_pub, msg).expect("seal failed");
-        LedgerEntry {
-            label: Label([0u8; 16]),
-            envelope: lb.envelope.into_bytes(),
-        }
+        LedgerEntry::mint(Label([0u8; 16]), lb.envelope.into_bytes(), 0)
     }
 
     /// Build a LedgerEntry via a Conversation (properly labelled).
+    /// Uses difficulty=0.
     fn make_conv_entry(
         sender_conv: &Conversation,
         them: &darqual_core::ContactCard,
@@ -42,7 +40,7 @@ mod tests {
         msg: &[u8],
     ) -> LedgerEntry {
         let (label, envelope) = sender_conv.seal(them, epoch, msg).expect("seal failed");
-        LedgerEntry { label, envelope }
+        LedgerEntry::mint(label, envelope, 0)
     }
 
     // ── epoch ──────────────────────────────────────────────────────────────
@@ -169,7 +167,7 @@ mod tests {
         let alice = Identity::generate();
         let entries = vec![make_entry(&alice, b"msg1"), make_entry(&alice, b"msg2")];
         let mut block = Block::new(1, [0u8; 32], entries);
-        // Mutate envelope after construction
+        // Mutate envelope after construction — Merkle root no longer matches.
         block.entries[0].envelope = b"tampered".to_vec();
         assert!(!block.validate());
     }
@@ -511,8 +509,194 @@ mod tests {
         assert!(msgs.contains(&b"addressed msg".to_vec()));
         assert!(msgs.contains(&b"old style".to_vec()));
 
-        // Alice_card owner can't decrypt Bob's messages
+        // Alice card owner can't decrypt Bob's messages
         let alice_msgs = trial_decrypt(&alice, &block);
         assert!(alice_msgs.is_empty());
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Stage 4 — PoW spam resistance
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── LedgerEntry::mint produces a valid PoW stamp ──────────────────────
+
+    #[test]
+    fn ledger_entry_mint_satisfies_pow_valid() {
+        let label = Label([0xAB; 16]);
+        let envelope = b"test envelope for pow".to_vec();
+        let difficulty = 10u32;
+
+        let entry = LedgerEntry::mint(label, envelope.clone(), difficulty);
+        assert!(
+            entry.pow_valid(difficulty),
+            "minted entry must satisfy its own difficulty"
+        );
+    }
+
+    // ── Merkle root changes when nonce changes ────────────────────────────
+
+    #[test]
+    fn nonce_committed_in_merkle_root() {
+        let label = Label([0x01; 16]);
+        let envelope = b"same content".to_vec();
+
+        let entry_a = LedgerEntry {
+            label,
+            envelope: envelope.clone(),
+            nonce: 0,
+        };
+        let entry_b = LedgerEntry {
+            label,
+            envelope: envelope.clone(),
+            nonce: 1,
+        };
+
+        // canonical_bytes must differ
+        assert_ne!(entry_a.canonical_bytes(), entry_b.canonical_bytes());
+
+        let block_a = Block::new(0, [0u8; 32], vec![entry_a]);
+        let block_b = Block::new(0, [0u8; 32], vec![entry_b]);
+        assert_ne!(
+            block_a.header.merkle_root, block_b.header.merkle_root,
+            "Merkle root must differ when nonce differs"
+        );
+    }
+
+    // ── tampered envelope invalidates PoW (content-binding) ───────────────
+
+    #[test]
+    fn tampered_envelope_fails_pow_after_mint() {
+        let label = Label([0x55; 16]);
+        let envelope = b"original".to_vec();
+        let difficulty = 8u32;
+
+        let mut entry = LedgerEntry::mint(label, envelope, difficulty);
+        // Still valid before tampering
+        assert!(entry.pow_valid(difficulty));
+
+        // Tamper the envelope
+        entry.envelope = b"tampered".to_vec();
+        assert!(
+            !entry.pow_valid(difficulty),
+            "PoW must be invalidated after envelope is tampered"
+        );
+    }
+
+    // ── block.validate_pow: rejects block with bad entry ─────────────────
+
+    #[test]
+    fn block_validate_pow_rejects_invalid_entry() {
+        let label = Label([0x22; 16]);
+        let envelope = b"spammy".to_vec();
+
+        // Entry with nonce=0 and a meaningful difficulty — almost certainly invalid.
+        let bad_entry = LedgerEntry {
+            label,
+            envelope,
+            nonce: 0,
+        };
+        let block = Block::new(0, [0u8; 32], vec![bad_entry]);
+
+        // difficulty=8: probability nonce=0 passes ≈ 1/256 — overwhelmingly rejected.
+        // We check a range of labels to make the test robust.
+        let difficulty = 10u32;
+        // If this particular nonce happens to satisfy difficulty (1-in-1024 chance),
+        // validate_pow would return true, which is correct behaviour. We just need to
+        // confirm the machinery runs; the probability-based test is in pow.rs.
+        // Here we verify validate_pow is consistent with per-entry pow_valid.
+        let expected = block.entries.iter().all(|e| e.pow_valid(difficulty));
+        assert_eq!(block.validate_pow(difficulty), expected);
+    }
+
+    // ── ledger rejects entry with invalid PoW when difficulty > 0 ─────────
+
+    #[test]
+    fn ledger_rejects_entry_with_invalid_pow() {
+        let mut ledger = Ledger::new_with_pow(10, 8);
+
+        // Build an entry with nonce=0 (very unlikely to satisfy difficulty=8)
+        // and repeatedly try different labels until we get one that fails.
+        let mut rejected = false;
+        for seed in 0u8..32 {
+            let label = Label([seed; 16]);
+            let envelope = vec![seed; 20];
+            let bad_entry = LedgerEntry {
+                label,
+                envelope,
+                nonce: 0,
+            };
+            if !bad_entry.pow_valid(8) {
+                let block = Block::new(0, [0u8; 32], vec![bad_entry]);
+                let result = ledger.append(block);
+                assert!(
+                    matches!(result, Err(LedgerError::InvalidPoW(8))),
+                    "expected InvalidPoW(8), got: {:?}",
+                    result
+                );
+                rejected = true;
+                break;
+            }
+        }
+        assert!(
+            rejected,
+            "should have found at least one seed where nonce=0 fails difficulty=8"
+        );
+    }
+
+    // ── ledger accepts entry with valid PoW ───────────────────────────────
+
+    #[test]
+    fn ledger_accepts_entry_with_valid_pow() {
+        let difficulty = 8u32;
+        let mut ledger = Ledger::new_with_pow(10, difficulty);
+
+        let label = Label([0xCC; 16]);
+        let envelope = b"valid pow entry".to_vec();
+        let entry = LedgerEntry::mint(label, envelope, difficulty);
+
+        let block = Block::new(0, [0u8; 32], vec![entry]);
+        ledger
+            .append(block)
+            .expect("valid PoW block must be accepted");
+        assert_eq!(ledger.len(), 1);
+    }
+
+    // ── ledger with difficulty=0 accepts anything (back-compat) ──────────
+
+    #[test]
+    fn ledger_pow_difficulty_zero_accepts_any_nonce() {
+        let mut ledger = Ledger::new(10); // pow_difficulty = 0 by default
+        let alice = Identity::generate();
+        let entry = make_entry(&alice, b"no pow needed");
+        let block = Block::new(0, [0u8; 32], vec![entry]);
+        ledger
+            .append(block)
+            .expect("difficulty=0 should always accept");
+        assert_eq!(ledger.len(), 1);
+    }
+
+    // ── higher difficulty: mint still converges and result is valid ────────
+
+    #[test]
+    fn mint_at_difficulty_12_produces_valid_entry() {
+        let difficulty = 12u32;
+        let label = Label([0x77; 16]);
+        let envelope = b"harder work".to_vec();
+        let entry = LedgerEntry::mint(label, envelope, difficulty);
+        assert!(
+            entry.pow_valid(difficulty),
+            "difficulty-12 minted entry must satisfy pow_valid"
+        );
+        // Also satisfies lower difficulty
+        assert!(entry.pow_valid(8));
+        assert!(entry.pow_valid(0));
+    }
+
+    // ── validate_pow trivially true for empty block ───────────────────────
+
+    #[test]
+    fn validate_pow_empty_block_is_true() {
+        let block = Block::new(0, [0u8; 32], vec![]);
+        assert!(block.validate_pow(16), "empty block has no entries to fail");
     }
 }

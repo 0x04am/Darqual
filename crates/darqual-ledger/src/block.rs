@@ -1,25 +1,50 @@
-use darqual_core::Label;
+use darqual_core::{pow_mint, pow_valid, Label};
 use serde::{Deserialize, Serialize};
 
 use crate::epoch::Epoch;
 use crate::merkle;
 
-/// A single addressed entry in a block: a dead-drop label + the lockbox envelope bytes.
+/// A single addressed entry in a block: a dead-drop label + lockbox envelope + PoW stamp.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LedgerEntry {
     pub label: Label,
     /// Raw UTF-8 bytes of the lockbox envelope string.
     pub envelope: Vec<u8>,
+    /// Proof-of-Work nonce.  The PoW stamp binds this entry's (label, envelope)
+    /// to the nonce so it cannot be reused or forged cheaply.
+    pub nonce: u64,
 }
 
 impl LedgerEntry {
+    /// Construct a `LedgerEntry` by grinding a valid PoW nonce for the given difficulty.
+    ///
+    /// Use `difficulty = 0` for back-compat / fast tests (no work required).
+    pub fn mint(label: Label, envelope: Vec<u8>, difficulty: u32) -> Self {
+        let nonce = pow_mint(&label, &envelope, difficulty);
+        LedgerEntry {
+            label,
+            envelope,
+            nonce,
+        }
+    }
+
     /// Canonical byte representation used as Merkle leaf content.
-    /// Format: label.0 (16 bytes) || envelope bytes.
+    ///
+    /// Format: `label.0 (16 bytes) || envelope bytes || nonce.to_le_bytes() (8 bytes)`.
+    /// The nonce is included so the PoW stamp is committed into the Merkle tree.
     pub fn canonical_bytes(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(16 + self.envelope.len());
+        let mut v = Vec::with_capacity(16 + self.envelope.len() + 8);
         v.extend_from_slice(&self.label.0);
         v.extend_from_slice(&self.envelope);
+        v.extend_from_slice(&self.nonce.to_le_bytes());
         v
+    }
+
+    /// Check that this entry's PoW stamp is valid for the given minimum difficulty.
+    ///
+    /// Always returns `true` when `difficulty == 0`.
+    pub fn pow_valid(&self, difficulty: u32) -> bool {
+        pow_valid(&self.label, &self.envelope, self.nonce, difficulty)
     }
 }
 
@@ -81,6 +106,17 @@ impl Block {
         let leaves: Vec<Vec<u8>> = self.entries.iter().map(|e| e.canonical_bytes()).collect();
         let computed = merkle::merkle_root(&leaves);
         computed == self.header.merkle_root && self.entries.len() as u32 == self.header.n_messages
+    }
+
+    /// Validate all entry PoW stamps against `difficulty`.
+    ///
+    /// Returns `true` if every entry satisfies the required difficulty
+    /// (trivially true when `difficulty == 0`).
+    pub fn validate_pow(&self, difficulty: u32) -> bool {
+        if difficulty == 0 {
+            return true;
+        }
+        self.entries.iter().all(|e| e.pow_valid(difficulty))
     }
 
     /// Check whether any entry in this block carries the given label.
