@@ -1,0 +1,13 @@
+[package]
+name = "darqual-cli"
+version = "0.0.1"
+edition = "2021"
+
+[[bin]]
+name = "darqual"
+path = "src/main.rs"
+
+[dependencies]
+darqual-core = { path = "../darqual-core" }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"

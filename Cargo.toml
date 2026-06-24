@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/darqual-core",
+    "crates/darqual-cli",
+]
+resolver = "2"
