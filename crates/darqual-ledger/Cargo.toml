@@ -1,0 +1,13 @@
+[package]
+name = "darqual-ledger"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+darqual-core = { path = "../darqual-core" }
+blake3 = "1"
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+
+[dev-dependencies]
+x25519-dalek = { version = "2", features = ["static_secrets"] }

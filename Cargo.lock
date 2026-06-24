@@ -324,6 +324,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "darqual-ledger"
+version = "0.2.0"
+dependencies = [
+ "blake3",
+ "darqual-core",
+ "serde",
+ "thiserror",
+ "x25519-dalek",
+]
+
+[[package]]
 name = "darqual-net"
 version = "0.1.0"
 dependencies = [

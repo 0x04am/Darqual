@@ -4,5 +4,6 @@ members = [
     "crates/darqual-cli",
     "crates/darqual-net",
     "crates/darqual-node",
+    "crates/darqual-ledger",
 ]
 resolver = "2"
