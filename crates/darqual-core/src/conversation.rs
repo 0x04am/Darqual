@@ -5,6 +5,7 @@ use x25519_dalek::PublicKey as X25519PublicKey;
 use crate::contact::ContactCard;
 use crate::error::Result;
 use crate::identity::Identity;
+use crate::keywheel::Keywheel;
 use crate::label::Label;
 use crate::lockbox::Lockbox;
 
@@ -64,5 +65,13 @@ impl Conversation {
         let their_x_pub = X25519PublicKey::from(them.x_pub);
         let lockbox = Lockbox::seal(&their_x_pub, msg)?;
         Ok((lbl, lockbox.envelope.into_bytes()))
+    }
+
+    /// Build a forward-secret [`Keywheel`] seeded from this conversation's shared secret.
+    ///
+    /// Both parties independently calling `keywheel(same_start_epoch)` will produce
+    /// identical label sequences — symmetric by ECDH symmetry.
+    pub fn keywheel(&self, start_epoch: u64) -> Keywheel {
+        Keywheel::from_seed(&self.shared, start_epoch)
     }
 }
