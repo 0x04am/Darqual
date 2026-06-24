@@ -1,14 +1,20 @@
-//! darqual-net — Network transport layer for Darqual (v0.1.0: TCP).
+//! darqual-net — Network transport layer for Darqual.
 //!
-//! Abstracts the transport behind a [`Transport`] trait so a Tor/Arti
-//! implementation can be dropped in later without rewriting the protocol layer.
+//! ## Stage 1 (v0.1.0)
+//! TCP point-to-point lockbox delivery: [`send_lockbox`] / [`serve`].
+//!
+//! ## Stage 9 (v0.9.0) — Light-client block transport
+//! Whole-block publish/fetch: [`serve_block`] / [`fetch_block`].
+//! See [`block_transport`] for design notes and deferred items (Tor L2, UI, groups).
 
 #![forbid(unsafe_code)]
 
+pub mod block_transport;
 pub mod error;
 pub mod frame;
 pub mod transport;
 
+pub use block_transport::{bind_ephemeral_block, fetch_block, serve_block, serve_block_listener};
 pub use error::{Error, Result};
 pub use transport::tcp::TcpTransport;
 pub use transport::Transport;
