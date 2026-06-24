@@ -2,7 +2,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
@@ -145,5 +145,5 @@ pub fn verify_ed(ed_pub: &[u8; 32], msg: &[u8], sig: &[u8; 64]) -> bool {
         Err(_) => return false,
     };
     let signature = Signature::from_bytes(sig);
-    vk.verify(msg, &signature).is_ok()
+    vk.verify_strict(msg, &signature).is_ok()
 }

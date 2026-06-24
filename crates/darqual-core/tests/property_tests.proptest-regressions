@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d1a25bb0a104f7bcb80db68655771f8eb432cc5eeeefbe1df8ce9611f11d51bc # shrinks to label_bytes = [14, 205, 80, 95, 57, 0, 92, 124, 160, 197, 212, 72, 39, 106, 158, 102], envelope = [37, 38, 44, 227, 14, 244, 229, 229, 187, 75, 147, 177, 108, 92, 171, 30], difficulty = 8

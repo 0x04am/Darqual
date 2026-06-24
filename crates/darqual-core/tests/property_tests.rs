@@ -14,7 +14,7 @@
 //! 6. `ContactCard::from_str` — arbitrary strings never panic
 //! 7. `DarqualAddress::from_str` — arbitrary strings never panic
 //! 8. Malformed prefixes, truncated envelopes, oversized payloads — graceful Err
-use darqual_core::{pow_mint, pow_valid, DarqualAddress, Error, Identity, Lockbox};
+use darqual_core::{pow_hash, pow_mint, pow_valid, DarqualAddress, Error, Identity, Lockbox};
 
 use proptest::prelude::*;
 use x25519_dalek::PublicKey as X25519PublicKey;
@@ -145,11 +145,17 @@ proptest! {
     /// against the tampered envelope. For small difficulties there's a small probability
     /// the tampered envelope also happens to satisfy the stamp — we use difficulty >= 8
     /// to keep the false-positive probability at 1/256 per bit (< 0.4% total).
+    /// The PoW stamp is BOUND to the envelope content: tampering the envelope
+    /// changes the PoW hash. NOTE: "a tampered envelope always *fails* pow_valid"
+    /// is only PROBABILISTIC — at difficulty D a tampered hash still passes with
+    /// probability 2^-D, so across many cases that assertion is flaky. The
+    /// deterministic, security-relevant invariant is hash-binding (a stamp cannot
+    /// be reused for different content).
     #[test]
-    fn prop_pow_tampered_envelope_fails(
+    fn prop_pow_tampered_envelope_changes_hash(
         label_bytes in prop::array::uniform16(any::<u8>()),
         envelope    in prop::collection::vec(any::<u8>(), 1..64),
-        difficulty  in 8u32..=12u32,
+        difficulty  in 0u32..=8u32,
     ) {
         let label = darqual_core::Label(label_bytes);
         let nonce = pow_mint(&label, &envelope, difficulty);
@@ -157,12 +163,12 @@ proptest! {
         // Flip the first byte to produce a different envelope.
         let mut tampered = envelope.clone();
         tampered[0] ^= 0xFF;
-        // If tamper produces the same bytes (xor with 0xFF of 0xFF = 0x00 from 0xFF), skip.
         prop_assume!(tampered != envelope);
 
-        prop_assert!(
-            !pow_valid(&label, &tampered, nonce, difficulty),
-            "PoW must not validate against tampered envelope"
+        prop_assert_ne!(
+            pow_hash(&label, &envelope, nonce),
+            pow_hash(&label, &tampered, nonce),
+            "PoW hash must differ for a tampered envelope (stamp is content-bound)"
         );
     }
 }
