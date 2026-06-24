@@ -24,8 +24,8 @@ independently before any claim.
 | 3 — Addressing & notification | v0.3.0 | ✅ DONE+TESTED | tag v0.3.0; +8 tests; dead-drop labels (symmetric, per-epoch, unlinkable) + notify + fetch_open |
 | 4 — Write path + RLN spam | v0.4.0 | ✅ DONE+TESTED (PoW) | tag v0.4.0; +PoW tests; difficulty-enforced spam gate. RLN/DPF = documented research path |
 | 5 — Storage scaling (buckets, erasure, DA) | v0.5.0 | ✅ DONE+TESTED | tag v0.5.0; 16 tests; buckets + Reed-Solomon + DA sampling + repair |
-| 6 — Committees (VRF) [NOVEL CORE] | v0.6.x | ⏳ NEXT | VRF election (tractable, via deterministic-ed25519 VRF) builds now; anytrust protocol + sybil-resistance = open research, documented |
-| 7 — Discovery (Alpenhorn IBE) | v0.7.x | ⬜ todo | — |
+| 6 — Committees (VRF) [NOVEL CORE] | v0.6.0 | ✅ DONE+TESTED (election) | tag v0.6.0; 12 tests; VRF sortition. anytrust protocol + sybil = documented research |
+| 7 — Discovery (Alpenhorn IBE) | v0.7.x | ⏳ NEXT | keywheel ratchet (forward-secret labels, tractable) builds; IBE add-friend = pairing crypto, documented research |
 | 8 — Metadata hardening (cover/DP/Loopix) | v0.8.x | ⬜ todo | — |
 | 9 — Clients (mobile light + L2 realtime) | v0.9.x | ⬜ todo | — |
 | 10 — Hardening + audit + beta | v1.0 | 🔬 external | needs real audit + real beta users — NOT autonomously completable |
