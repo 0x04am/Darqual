@@ -84,7 +84,11 @@ pub async fn fetch_block(peer_addr: &str) -> Result<Block> {
     let data = frame::read_frame(&mut stream).await?;
     let block: Block = serde_json::from_slice(&data)
         .map_err(|e| Error::Encoding(format!("block deserialisation failed: {e}")))?;
-    debug!(peer = peer_addr, entries = block.entries.len(), "block fetched");
+    debug!(
+        peer = peer_addr,
+        entries = block.entries.len(),
+        "block fetched"
+    );
     Ok(block)
 }
 

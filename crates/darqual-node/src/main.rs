@@ -27,7 +27,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use darqual_core::{ContactCard, Conversation, Identity, Lockbox};
 use darqual_cover::pad_block;
-use darqual_ledger::{Block, LedgerEntry, epoch_now, fetch_open, notify};
+use darqual_ledger::{epoch_now, fetch_open, notify, Block, LedgerEntry};
 use darqual_net::{fetch_block, send_lockbox, serve, serve_block};
 use rand::thread_rng;
 use tracing::{error, info};
@@ -226,7 +226,10 @@ async fn cmd_publish(bind: &str, to: &str, message: &str, cover: usize) -> Resul
         block.entries.len() - 1,
         bind
     );
-    println!("[publish] label={} — serving on {} (Ctrl-C to stop)", label, bind);
+    println!(
+        "[publish] label={} — serving on {} (Ctrl-C to stop)",
+        label, bind
+    );
 
     let serve_fut = serve_block(bind, block);
 

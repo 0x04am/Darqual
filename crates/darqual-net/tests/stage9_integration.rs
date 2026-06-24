@@ -22,7 +22,7 @@ use std::time::Duration;
 
 use darqual_core::{Conversation, Identity, Lockbox};
 use darqual_cover::pad_block;
-use darqual_ledger::{Block, LedgerEntry, fetch_open, notify};
+use darqual_ledger::{fetch_open, notify, Block, LedgerEntry};
 use darqual_net::{bind_ephemeral_block, fetch_block, serve_block_listener};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -113,9 +113,7 @@ async fn stage9_light_client_end_to_end() {
 
     let block_clone = block.clone();
     tokio::spawn(async move {
-        serve_block_listener(listener, block_clone)
-            .await
-            .ok(); // loop exits when dropped
+        serve_block_listener(listener, block_clone).await.ok(); // loop exits when dropped
     });
 
     tokio::time::sleep(Duration::from_millis(20)).await;
@@ -178,9 +176,7 @@ async fn stage9_keywheel_label_light_client() {
     assert!(block.entries.len() >= 9);
 
     // ── publisher ──────────────────────────────────────────────────────────
-    let (listener, addr) = bind_ephemeral_block("127.0.0.1")
-        .await
-        .expect("bind");
+    let (listener, addr) = bind_ephemeral_block("127.0.0.1").await.expect("bind");
 
     let block_clone = block.clone();
     tokio::spawn(async move {
@@ -201,7 +197,10 @@ async fn stage9_keywheel_label_light_client() {
     let bob_label = bob_kw.label();
 
     let bob_has_mail = bob_block.entries.iter().any(|e| e.label == bob_label);
-    assert!(bob_has_mail, "Bob's keywheel label must appear in the block");
+    assert!(
+        bob_has_mail,
+        "Bob's keywheel label must appear in the block"
+    );
 
     let bob_msgs: Vec<Vec<u8>> = bob_block
         .entries
@@ -213,7 +212,11 @@ async fn stage9_keywheel_label_light_client() {
         })
         .collect();
 
-    assert_eq!(bob_msgs.len(), 1, "Bob must recover exactly one message (kw path)");
+    assert_eq!(
+        bob_msgs.len(),
+        1,
+        "Bob must recover exactly one message (kw path)"
+    );
     assert_eq!(bob_msgs[0], b"keywheel end to end");
 
     // ── Eve's keywheel label doesn't match ────────────────────────────────
@@ -228,7 +231,10 @@ async fn stage9_keywheel_label_light_client() {
     );
 
     let eve_has_mail = bob_block.entries.iter().any(|e| e.label == eve_label);
-    assert!(!eve_has_mail, "Eve's keywheel label must NOT appear in the block");
+    assert!(
+        !eve_has_mail,
+        "Eve's keywheel label must NOT appear in the block"
+    );
 
     let eve_msgs: Vec<Vec<u8>> = bob_block
         .entries
@@ -260,7 +266,10 @@ async fn stage9_cover_traffic_hides_real_entry() {
         "stranger label must not match"
     );
     let stranger_msgs = fetch_open(&stranger_conv, epoch, &block, &stranger);
-    assert!(stranger_msgs.is_empty(), "stranger must recover zero messages");
+    assert!(
+        stranger_msgs.is_empty(),
+        "stranger must recover zero messages"
+    );
 
     // Bob still recovers his message (no network, in-proc)
     let bob_conv = Conversation::new(&bob, &alice.contact_card());

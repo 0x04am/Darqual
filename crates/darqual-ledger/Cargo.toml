@@ -11,3 +11,5 @@ thiserror = "1"
 
 [dev-dependencies]
 x25519-dalek = { version = "2", features = ["static_secrets"] }
+proptest = "1"
+serde_json = "1"
