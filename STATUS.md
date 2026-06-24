@@ -19,8 +19,8 @@ independently before any claim.
 | Stage | Version | Status | Evidence |
 |---|---|---|---|
 | 0 — Foundation (identity, lockbox, CLI) | v0.0.1 | ✅ DONE+TESTED | tag v0.0.1; 10 tests; verify.sh green; live Alice→Bob→Eve demo |
-| 1 — Transport (onion-to-onion) | v0.1.x | ⏳ NEXT | — |
-| 2 — Ledger (epochs, hot-window) | v0.2.x | ⬜ todo | — |
+| 1 — Transport (onion-to-onion) | v0.1.0 | ✅ DONE+TESTED (TCP) | tag v0.1.0; 2 net integration tests; verify.sh green; live two-daemon TCP demo (Alice→Bob recv, Eve rejected). Tor/Arti = v0.1.x next |
+| 2 — Ledger (epochs, hot-window) | v0.2.x | ⏳ NEXT | — |
 | 3 — Addressing & notification | v0.3.x | ⬜ todo | — |
 | 4 — Write path + RLN spam | v0.4.x | ⬜ todo | — |
 | 5 — Storage scaling (buckets, erasure, DA) | v0.5.x | ⬜ todo | — |
