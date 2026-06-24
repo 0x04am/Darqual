@@ -772,9 +772,11 @@ dependencies = [
  "arti-client",
  "futures",
  "rustls",
+ "safelog",
  "tokio",
  "tor-cell",
  "tor-hsservice",
+ "tor-proto",
  "tor-rtcompat",
  "tracing",
 ]
