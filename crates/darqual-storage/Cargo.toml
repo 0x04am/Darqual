@@ -1,0 +1,12 @@
+[package]
+name = "darqual-storage"
+version = "0.5.0"
+edition = "2021"
+
+[dependencies]
+darqual-ledger = { path = "../darqual-ledger" }
+darqual-core   = { path = "../darqual-core" }
+reed-solomon-erasure = "6"
+blake3  = "1"
+rand    = { version = "0.8", features = ["small_rng"] }
+thiserror = "1"
