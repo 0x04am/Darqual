@@ -54,14 +54,21 @@ as far as it verifiably holds together — truth over theater.
 ---
 
 ## Build log
-- S218 overnight (2026-06-24): Stages 0–2 shipped, tested, tagged.
-  - v0.0.1 Foundation — identity, lockboxes, CLI (10 tests)
-  - v0.1.0 Transport — TCP node-to-node + daemon (2 integration tests)
-  - v0.2.0 Ledger — epochs, Merkle, hot-window, trial-decrypt (22 tests)
-  - **34 tests total, all green.** verify.sh gate established + run before every commit.
-  - 11-stage task ladder (#144–#153, epic #146); research corpus in
-    ~/Jawz/notes/projects/anon-messenger-research/.
-- RESUME POINT: Stage 3 (#147) — dead-drop PRF labels (Pung) + Talek private notification.
+- S218 overnight→day (2026-06-24): Stages 0–9 shipped + Stage 10 partial. 11 tags
+  (v0.0.1 → v0.10.0). **132 tests, all green.** verify.sh gate run before every commit;
+  every subagent's work verified independently (caught a recursive-trait bug, clippy nits,
+  flawed test assumptions). Whole pipeline demoed live end-to-end over the network.
+  - v0.0.1 Foundation · v0.1.0 Transport(TCP) · v0.2.0 Ledger · v0.3.0 Dead-drop labels
+  - v0.4.0 PoW spam · v0.5.0 Storage(buckets+erasure+DA) · v0.6.0 VRF committees
+  - v0.7.0 Keywheel(forward-secret) · v0.8.0 Cover+DP · v0.9.0 E2E light-client
+  - v0.10.0 Threat model + property/fuzz tests
+- 🧱 HIT THE WALL (honest): Stage 10's external audit + real beta users = not autonomously
+  possible. Also documented-not-built (research/deferred): Tor/Arti transport swap, PIR
+  retrieval, full RLN/DPF, IBE add-friend (pairings), Loopix/Sphinx mix, content forward
+  secrecy (Double Ratchet), the full anytrust committee protocol + sybil-resistant set.
+  See THREAT-MODEL.md for the complete honest accounting.
+- RESUME POINTS (highest value first): (1) TCP→Tor/Arti onion transport (kills the IP leak),
+  (2) PIR retrieval, (3) content Double Ratchet, (4) external audit.
 
 ---
 
