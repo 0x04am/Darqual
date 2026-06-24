@@ -7,5 +7,6 @@ members = [
     "crates/darqual-ledger",
     "crates/darqual-storage",
     "crates/darqual-committee",
+    "crates/darqual-cover",
 ]
 resolver = "2"

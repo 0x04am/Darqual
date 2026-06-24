@@ -350,6 +350,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "darqual-cover"
+version = "0.8.0"
+dependencies = [
+ "blake3",
+ "darqual-core",
+ "darqual-ledger",
+ "rand",
+ "rand_chacha",
+ "thiserror",
+ "x25519-dalek",
+]
+
+[[package]]
 name = "darqual-ledger"
 version = "0.2.0"
 dependencies = [
