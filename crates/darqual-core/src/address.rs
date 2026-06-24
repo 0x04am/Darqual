@@ -9,14 +9,20 @@ use crate::error::{Error, Result};
 const PREFIX: &str = "dq1";
 
 /// A self-authenticating Darqual address.
-/// Format: "dq1" + base32_nopad_lowercase(blake3(ed_verifying_key)[..20])
+/// Format: "dq1" + base32_nopad_lowercase(blake3(ed_pub || x_pub)[..20]).
+/// The address commits to BOTH the ed25519 signing key AND the x25519 encryption
+/// key, so a ContactCard cannot substitute the encryption key without changing the
+/// address — this prevents identity-substitution / MITM on the encryption key.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DarqualAddress(String);
 
 impl DarqualAddress {
-    /// Derive an address from a raw ed25519 verifying key (32 bytes).
-    pub fn from_ed_pubkey(ed_pub: &[u8; 32]) -> Self {
-        let hash = blake3::hash(ed_pub);
+    /// Derive an address from the identity's ed25519 + x25519 public keys (32 bytes each).
+    pub fn from_keys(ed_pub: &[u8; 32], x_pub: &[u8; 32]) -> Self {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(ed_pub);
+        hasher.update(x_pub);
+        let hash = hasher.finalize();
         let truncated = &hash.as_bytes()[..20];
         let encoded = BASE32_NOPAD.encode(truncated).to_lowercase();
         DarqualAddress(format!("{}{}", PREFIX, encoded))

@@ -60,9 +60,12 @@ proptest! {
 
     /// Same ed25519 pub key always yields the same DarqualAddress.
     #[test]
-    fn prop_address_deterministic(ed_pub in prop::array::uniform32(any::<u8>())) {
-        let a1 = DarqualAddress::from_ed_pubkey(&ed_pub);
-        let a2 = DarqualAddress::from_ed_pubkey(&ed_pub);
+    fn prop_address_deterministic(
+        ed_pub in prop::array::uniform32(any::<u8>()),
+        x_pub  in prop::array::uniform32(any::<u8>()),
+    ) {
+        let a1 = DarqualAddress::from_keys(&ed_pub, &x_pub);
+        let a2 = DarqualAddress::from_keys(&ed_pub, &x_pub);
         prop_assert_eq!(a1, a2);
     }
 
@@ -72,11 +75,12 @@ proptest! {
     fn prop_address_different_keys_differ(
         k1 in prop::array::uniform32(any::<u8>()),
         k2 in prop::array::uniform32(any::<u8>()),
+        x_pub in prop::array::uniform32(any::<u8>()),
     ) {
         // Only assert inequality when keys differ; equal keys *should* collide.
         prop_assume!(k1 != k2);
-        let a1 = DarqualAddress::from_ed_pubkey(&k1);
-        let a2 = DarqualAddress::from_ed_pubkey(&k2);
+        let a1 = DarqualAddress::from_keys(&k1, &x_pub);
+        let a2 = DarqualAddress::from_keys(&k2, &x_pub);
         prop_assert_ne!(a1, a2);
     }
 }

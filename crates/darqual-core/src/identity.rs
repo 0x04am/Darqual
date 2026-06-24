@@ -49,7 +49,8 @@ impl Identity {
     /// Derive the Darqual address for this identity.
     pub fn address(&self) -> DarqualAddress {
         let ed_pub: [u8; 32] = self.signing_key.verifying_key().to_bytes();
-        DarqualAddress::from_ed_pubkey(&ed_pub)
+        let x_pub: [u8; 32] = X25519PublicKey::from(&self.x_secret).to_bytes();
+        DarqualAddress::from_keys(&ed_pub, &x_pub)
     }
 
     /// Build a shareable ContactCard for this identity.

@@ -34,7 +34,7 @@ impl ContactCard {
 
     /// Verify that the address is correctly derived from ed_pub.
     pub fn verify(&self) -> bool {
-        let expected = DarqualAddress::from_ed_pubkey(&self.ed_pub);
+        let expected = DarqualAddress::from_keys(&self.ed_pub, &self.x_pub);
         self.address == expected
     }
 

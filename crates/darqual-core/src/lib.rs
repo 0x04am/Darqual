@@ -115,6 +115,22 @@ mod tests {
         assert!(!card.verify(), "tampered card should not verify");
     }
 
+    #[test]
+    fn contact_card_verify_fail_swapped_x_pub() {
+        // Regression for the audit MITM finding: the address must bind the x25519
+        // ENCRYPTION key too, so swapping x_pub (e.g. an attacker substituting their
+        // own encryption key while keeping the victim's ed_pub) must fail verify().
+        let id = Identity::generate();
+        let attacker = Identity::generate();
+        let mut card = id.contact_card();
+
+        card.x_pub = attacker.contact_card().x_pub;
+        assert!(
+            !card.verify(),
+            "card with a substituted encryption key must NOT verify (anti-MITM)"
+        );
+    }
+
     // ── ContactCard: encode → decode roundtrip ───────────────────────────────
 
     #[test]

@@ -41,7 +41,7 @@ committee. We make it economically/cryptographically hard, not impossible.
 
 ## 4. Core primitives (the vocabulary)
 - **Identity:** ed25519 keypair (signing/identity) + X25519 keypair (encryption).
-- **Darqual Address:** `dq1` + base32(BLAKE3(ed25519_pubkey)[..20])` — self-authenticating.
+- **Darqual Address:** `dq1` + base32(BLAKE3(ed_pub || x_pub)[..20])` — self-authenticating, commits to BOTH signing + encryption keys.
 - **Contact string:** address + both public keys, shareable out-of-band.
 - **Lockbox:** an anonymous sealed-box — `ephemeral_x25519_pub || nonce || AEAD(msg)` —
   encrypted to a recipient's X25519 key. Sender identity is NOT in the lockbox (anonymous).
