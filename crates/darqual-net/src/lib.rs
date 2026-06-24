@@ -63,12 +63,13 @@ pub async fn serve_listener(
     loop {
         let (mut stream, peer) = listener.accept().await?;
         debug!(?peer, "accepted connection");
-        match frame::read_frame(&mut stream).await {
-            Ok(bytes) => match String::from_utf8(bytes) {
+        match tokio::time::timeout(frame::CONN_TIMEOUT, frame::read_frame(&mut stream)).await {
+            Ok(Ok(bytes)) => match String::from_utf8(bytes) {
                 Ok(envelope) => on_envelope(envelope),
                 Err(e) => warn!(?peer, "non-UTF8 frame: {}", e),
             },
-            Err(e) => warn!(?peer, "frame read error: {}", e),
+            Ok(Err(e)) => warn!(?peer, "frame read error: {}", e),
+            Err(_) => warn!(?peer, "connection timed out"),
         }
     }
 }

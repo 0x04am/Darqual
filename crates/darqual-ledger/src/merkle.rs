@@ -41,7 +41,15 @@ pub fn merkle_root(leaves: &[Vec<u8>]) -> [u8; 32] {
             if i + 1 < layer.len() {
                 next.push(hash_node(&layer[i], &layer[i + 1]));
             } else {
-                // Odd node — duplicate last
+                // Odd node — duplicate last.
+                //
+                // NOTE (audit): bare last-node duplication has the CVE-2012-2459
+                // ambiguity — leaf sets [A,B,C] and [A,B,C,C] produce the SAME
+                // root. Darqual mitigates this at the BLOCK layer: Block::validate
+                // also checks entries.len() == header.n_messages, and n_messages is
+                // committed in Block::hash, so the leaf count is bound independently
+                // of the Merkle root. Callers using merkle_root directly for a
+                // security commitment MUST also commit the leaf count.
                 next.push(hash_node(&layer[i], &layer[i]));
             }
             i += 2;
