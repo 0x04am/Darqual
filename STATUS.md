@@ -25,8 +25,8 @@ independently before any claim.
 | 4 — Write path + RLN spam | v0.4.0 | ✅ DONE+TESTED (PoW) | tag v0.4.0; +PoW tests; difficulty-enforced spam gate. RLN/DPF = documented research path |
 | 5 — Storage scaling (buckets, erasure, DA) | v0.5.0 | ✅ DONE+TESTED | tag v0.5.0; 16 tests; buckets + Reed-Solomon + DA sampling + repair |
 | 6 — Committees (VRF) [NOVEL CORE] | v0.6.0 | ✅ DONE+TESTED (election) | tag v0.6.0; 12 tests; VRF sortition. anytrust protocol + sybil = documented research |
-| 7 — Discovery (Alpenhorn IBE) | v0.7.x | ⏳ NEXT | keywheel ratchet (forward-secret labels, tractable) builds; IBE add-friend = pairing crypto, documented research |
-| 8 — Metadata hardening (cover/DP/Loopix) | v0.8.x | ⬜ todo | — |
+| 7 — Discovery (Alpenhorn IBE) | v0.7.0 | ✅ DONE+TESTED (keywheel) | tag v0.7.0; 6 tests; forward-secret labels. IBE add-friend = pairing crypto, documented research |
+| 8 — Metadata hardening (cover/DP/Loopix) | v0.8.x | ⏳ NEXT | cover traffic + DP dead-drop noise (tractable) building; Loopix/Sphinx = documented research |
 | 9 — Clients (mobile light + L2 realtime) | v0.9.x | ⬜ todo | — |
 | 10 — Hardening + audit + beta | v1.0 | 🔬 external | needs real audit + real beta users — NOT autonomously completable |
 
