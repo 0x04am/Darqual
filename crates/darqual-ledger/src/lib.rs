@@ -4,20 +4,46 @@ pub mod block;
 pub mod epoch;
 pub mod ledger;
 pub mod merkle;
+pub mod notify;
 pub mod sweep;
 
-pub use block::{Block, BlockHeader};
+pub use block::{Block, BlockHeader, LedgerEntry};
 pub use epoch::{epoch_at, epoch_now, Epoch, EPOCH_SECONDS};
 pub use ledger::{Ledger, LedgerError};
 pub use merkle::{merkle_proof, merkle_root, verify_proof, MerkleProof, EMPTY_ROOT};
+pub use notify::{fetch_open, notify};
 pub use sweep::{sweep_window, trial_decrypt};
 
 #[cfg(test)]
 mod tests {
-    use darqual_core::{Identity, Lockbox};
+    use darqual_core::{Conversation, Identity, Label, Lockbox};
     use x25519_dalek::PublicKey as X25519PublicKey;
 
     use super::*;
+
+    // ── helpers ───────────────────────────────────────────────────────────
+
+    /// Build a LedgerEntry for `recipient` with a blank (zero) label — used for
+    /// Stage-2-style tests that don't need addressed labels.
+    fn make_entry(recipient: &Identity, msg: &[u8]) -> LedgerEntry {
+        let x_pub = X25519PublicKey::from(&recipient.x_secret);
+        let lb = Lockbox::seal(&x_pub, msg).expect("seal failed");
+        LedgerEntry {
+            label: Label([0u8; 16]),
+            envelope: lb.envelope.into_bytes(),
+        }
+    }
+
+    /// Build a LedgerEntry via a Conversation (properly labelled).
+    fn make_conv_entry(
+        sender_conv: &Conversation,
+        them: &darqual_core::ContactCard,
+        epoch: u64,
+        msg: &[u8],
+    ) -> LedgerEntry {
+        let (label, envelope) = sender_conv.seal(them, epoch, msg).expect("seal failed");
+        LedgerEntry { label, envelope }
+    }
 
     // ── epoch ──────────────────────────────────────────────────────────────
 
@@ -33,7 +59,6 @@ mod tests {
     #[test]
     fn epoch_now_is_reasonable() {
         let e = epoch_now();
-        // Epoch 0 would be before 1970; sanity-check it's > 0 and sane
         assert!(e > 28_000_000, "epoch_now seems too low: {}", e);
     }
 
@@ -118,7 +143,6 @@ mod tests {
         let leaves: Vec<Vec<u8>> = vec![b"left".to_vec(), b"right".to_vec()];
         let root = merkle_root(&leaves);
         let mut proof = merkle_proof(&leaves, 0).expect("proof failed");
-        // Flip a byte in the first sibling
         proof.siblings[0][0] ^= 0xFF;
         assert!(!verify_proof(&root, b"left", &proof));
     }
@@ -132,33 +156,21 @@ mod tests {
 
     // ── block ─────────────────────────────────────────────────────────────
 
-    fn make_lockbox_bytes(recipient: &Identity, msg: &[u8]) -> Vec<u8> {
-        let x_pub = X25519PublicKey::from(&recipient.x_secret);
-        let lb = Lockbox::seal(&x_pub, msg).expect("seal failed");
-        lb.envelope.into_bytes()
-    }
-
     #[test]
     fn block_validate_wellformed() {
         let alice = Identity::generate();
-        let lbs = vec![
-            make_lockbox_bytes(&alice, b"msg1"),
-            make_lockbox_bytes(&alice, b"msg2"),
-        ];
-        let block = Block::new(1, [0u8; 32], lbs);
+        let entries = vec![make_entry(&alice, b"msg1"), make_entry(&alice, b"msg2")];
+        let block = Block::new(1, [0u8; 32], entries);
         assert!(block.validate());
     }
 
     #[test]
-    fn block_validate_fails_mutated_lockbox() {
+    fn block_validate_fails_mutated_entry() {
         let alice = Identity::generate();
-        let lbs = vec![
-            make_lockbox_bytes(&alice, b"msg1"),
-            make_lockbox_bytes(&alice, b"msg2"),
-        ];
-        let mut block = Block::new(1, [0u8; 32], lbs);
-        // Mutate a lockbox after construction
-        block.lockboxes[0] = b"tampered".to_vec();
+        let entries = vec![make_entry(&alice, b"msg1"), make_entry(&alice, b"msg2")];
+        let mut block = Block::new(1, [0u8; 32], entries);
+        // Mutate envelope after construction
+        block.entries[0].envelope = b"tampered".to_vec();
         assert!(!block.validate());
     }
 
@@ -171,8 +183,8 @@ mod tests {
 
     // ── ledger ────────────────────────────────────────────────────────────
 
-    fn genesis_block(epoch: u64, lockboxes: Vec<Vec<u8>>) -> Block {
-        Block::new(epoch, [0u8; 32], lockboxes)
+    fn genesis_block(epoch: u64, entries: Vec<LedgerEntry>) -> Block {
+        Block::new(epoch, [0u8; 32], entries)
     }
 
     #[test]
@@ -195,7 +207,6 @@ mod tests {
         let b0 = genesis_block(0, vec![]);
         ledger.append(b0).expect("genesis append failed");
 
-        // Build a block with a wrong prev_hash
         let bad_prev = [0xDE; 32];
         let bad_block = Block::new(1, bad_prev, vec![]);
         let result = ledger.append(bad_block);
@@ -210,10 +221,10 @@ mod tests {
     fn ledger_invalid_block_errors() {
         let mut ledger = Ledger::new(10);
         let alice = Identity::generate();
-        let lbs = vec![make_lockbox_bytes(&alice, b"x")];
-        let mut block = Block::new(0, [0u8; 32], lbs);
+        let entries = vec![make_entry(&alice, b"x")];
+        let mut block = Block::new(0, [0u8; 32], entries);
         // Corrupt after construction
-        block.lockboxes[0] = b"corrupted".to_vec();
+        block.entries[0].envelope = b"corrupted".to_vec();
         let result = ledger.append(block);
         assert!(matches!(result, Err(LedgerError::InvalidBlock)));
     }
@@ -223,13 +234,9 @@ mod tests {
         let mut ledger = Ledger::new(10);
         let alice = Identity::generate();
 
-        let b0 = genesis_block(0, vec![make_lockbox_bytes(&alice, b"first")]);
+        let b0 = genesis_block(0, vec![make_entry(&alice, b"first")]);
         ledger.append(b0).expect("b0");
-        let b1 = Block::new(
-            1,
-            ledger.tip_hash(),
-            vec![make_lockbox_bytes(&alice, b"second")],
-        );
+        let b1 = Block::new(1, ledger.tip_hash(), vec![make_entry(&alice, b"second")]);
         ledger.append(b1).expect("b1");
         let b2 = Block::new(2, ledger.tip_hash(), vec![]);
         ledger.append(b2).expect("b2");
@@ -249,21 +256,16 @@ mod tests {
     #[test]
     fn ledger_prune_keeps_window() {
         let mut ledger = Ledger::new(3);
-        // Append 5 blocks
         for i in 0..5u64 {
             let prev = ledger.tip_hash();
             let b = Block::new(i, prev, vec![]);
             ledger.append(b).expect("append failed");
         }
-        // Should only keep 3
         assert_eq!(ledger.len(), 3);
-        // The oldest retained block's epoch should be 2 (blocks 0,1 were pruned).
         assert_eq!(ledger.blocks()[0].header.epoch, 2);
-        // Each retained block individually validates.
         for b in ledger.blocks() {
             assert!(b.validate(), "pruned block failed validate");
         }
-        // Adjacent blocks link correctly within the retained window.
         let blocks = ledger.blocks();
         for i in 1..blocks.len() {
             assert_eq!(
@@ -283,12 +285,11 @@ mod tests {
         let bob = Identity::generate();
         let stranger = Identity::generate();
 
-        // Build a block with: alice's msg, bob's msg, bob's msg #2
-        let alice_lb = make_lockbox_bytes(&alice, b"for alice");
-        let bob_lb1 = make_lockbox_bytes(&bob, b"for bob 1");
-        let bob_lb2 = make_lockbox_bytes(&bob, b"for bob 2");
+        let alice_entry = make_entry(&alice, b"for alice");
+        let bob_entry1 = make_entry(&bob, b"for bob 1");
+        let bob_entry2 = make_entry(&bob, b"for bob 2");
 
-        let block = Block::new(0, [0u8; 32], vec![alice_lb, bob_lb1, bob_lb2]);
+        let block = Block::new(0, [0u8; 32], vec![alice_entry, bob_entry1, bob_entry2]);
 
         let bob_msgs = trial_decrypt(&bob, &block);
         assert_eq!(bob_msgs.len(), 2, "Bob should decrypt exactly 2");
@@ -311,21 +312,19 @@ mod tests {
 
         let mut ledger = Ledger::new(10);
 
-        // Block 0: one message for Bob, one for Alice
-        let b0_lbs = vec![
-            make_lockbox_bytes(&bob, b"bob epoch 0"),
-            make_lockbox_bytes(&alice, b"alice epoch 0"),
+        let b0_entries = vec![
+            make_entry(&bob, b"bob epoch 0"),
+            make_entry(&alice, b"alice epoch 0"),
         ];
-        let b0 = Block::new(0, [0u8; 32], b0_lbs);
+        let b0 = Block::new(0, [0u8; 32], b0_entries);
         ledger.append(b0).expect("b0");
 
-        // Block 1: two messages for Bob
         let tip = ledger.tip_hash();
-        let b1_lbs = vec![
-            make_lockbox_bytes(&bob, b"bob epoch 1a"),
-            make_lockbox_bytes(&bob, b"bob epoch 1b"),
+        let b1_entries = vec![
+            make_entry(&bob, b"bob epoch 1a"),
+            make_entry(&bob, b"bob epoch 1b"),
         ];
-        let b1 = Block::new(1, tip, b1_lbs);
+        let b1 = Block::new(1, tip, b1_entries);
         ledger.append(b1).expect("b1");
 
         let bob_msgs = sweep_window(&bob, &ledger);
@@ -333,5 +332,187 @@ mod tests {
 
         let stranger_msgs = sweep_window(&stranger, &ledger);
         assert!(stranger_msgs.is_empty(), "Stranger sees nothing");
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Stage 3 — Addressing & Notification
+    // ════════════════════════════════════════════════════════════════════════
+
+    // ── label symmetry ────────────────────────────────────────────────────
+
+    #[test]
+    fn conversation_label_is_symmetric() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let alice_card = alice.contact_card();
+        let bob_card = bob.contact_card();
+
+        let alice_conv = Conversation::new(&alice, &bob_card);
+        let bob_conv = Conversation::new(&bob, &alice_card);
+
+        let epoch = 42u64;
+        assert_eq!(
+            alice_conv.label(epoch),
+            bob_conv.label(epoch),
+            "both sides of the conversation must derive the same label"
+        );
+    }
+
+    // ── label rotation ────────────────────────────────────────────────────
+
+    #[test]
+    fn label_rotates_per_epoch() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let bob_card = bob.contact_card();
+
+        let conv = Conversation::new(&alice, &bob_card);
+        assert_ne!(
+            conv.label(5),
+            conv.label(6),
+            "label must change between epochs"
+        );
+    }
+
+    // ── label unlinkability ───────────────────────────────────────────────
+
+    #[test]
+    fn label_unlinkable_across_conversations() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let charlie = Identity::generate();
+
+        let conv_ab = Conversation::new(&alice, &bob.contact_card());
+        let conv_ac = Conversation::new(&alice, &charlie.contact_card());
+
+        let epoch = 1u64;
+        assert_ne!(
+            conv_ab.label(epoch),
+            conv_ac.label(epoch),
+            "different conversations must produce different labels at same epoch"
+        );
+    }
+
+    // ── notify: present ───────────────────────────────────────────────────
+
+    #[test]
+    fn notify_true_when_my_labeled_lockbox_present() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let bob_card = bob.contact_card();
+        let alice_card = alice.contact_card();
+
+        let epoch = 10u64;
+        let alice_conv = Conversation::new(&alice, &bob_card);
+        let bob_conv = Conversation::new(&bob, &alice_card);
+
+        let entry = make_conv_entry(&alice_conv, &bob_card, epoch, b"hey bob");
+        let block = Block::new(epoch, [0u8; 32], vec![entry]);
+
+        assert!(
+            notify(&bob_conv, epoch, &block),
+            "Bob should be notified when his label is present"
+        );
+    }
+
+    // ── notify: absent ────────────────────────────────────────────────────
+
+    #[test]
+    fn notify_false_when_absent() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let bob_card = bob.contact_card();
+        let alice_card = alice.contact_card();
+
+        let epoch = 10u64;
+        let alice_conv = Conversation::new(&alice, &bob_card);
+        let bob_conv = Conversation::new(&bob, &alice_card);
+
+        // Put Alice's message in epoch 10, check notify for epoch 11
+        let entry = make_conv_entry(&alice_conv, &bob_card, epoch, b"hey bob");
+        let block = Block::new(epoch, [0u8; 32], vec![entry]);
+
+        assert!(
+            !notify(&bob_conv, epoch + 1, &block),
+            "Bob should NOT be notified for wrong epoch"
+        );
+    }
+
+    // ── fetch_open: full round-trip ───────────────────────────────────────
+
+    #[test]
+    fn fetch_open_returns_my_message_addressed_by_label() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let bob_card = bob.contact_card();
+        let alice_card = alice.contact_card();
+
+        let epoch = 7u64;
+        let alice_conv = Conversation::new(&alice, &bob_card);
+        let bob_conv = Conversation::new(&bob, &alice_card);
+
+        let msg = b"dead drop confirmed";
+        let entry = make_conv_entry(&alice_conv, &bob_card, epoch, msg);
+        let block = Block::new(epoch, [0u8; 32], vec![entry]);
+
+        // Bob notifies first
+        assert!(notify(&bob_conv, epoch, &block));
+
+        // Bob fetches and opens
+        let plaintexts = fetch_open(&bob_conv, epoch, &block, &bob);
+        assert_eq!(plaintexts.len(), 1);
+        assert_eq!(plaintexts[0], msg);
+    }
+
+    // ── addressing privacy: stranger's label doesn't match ────────────────
+
+    #[test]
+    fn stranger_conversation_label_does_not_match() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let eve = Identity::generate();
+        let bob_card = bob.contact_card();
+        let alice_card = alice.contact_card();
+
+        let epoch = 3u64;
+        let alice_conv = Conversation::new(&alice, &bob_card);
+        // Eve tries to spy: she forms a conv with Bob using a different Alice-derived secret
+        let eve_conv = Conversation::new(&eve, &alice_card);
+
+        let entry = make_conv_entry(&alice_conv, &bob_card, epoch, b"private");
+        let block = Block::new(epoch, [0u8; 32], vec![entry]);
+
+        assert!(
+            !notify(&eve_conv, epoch, &block),
+            "Eve's conversation label must not match Alice-Bob's"
+        );
+    }
+
+    // ── existing trial_decrypt still works over entries ───────────────────
+
+    #[test]
+    fn trial_decrypt_still_works_over_entries() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let bob_card = bob.contact_card();
+        let _alice_card = alice.contact_card();
+
+        let epoch = 5u64;
+        let alice_conv = Conversation::new(&alice, &bob_card);
+
+        // A properly labelled entry plus a zero-label entry
+        let labelled = make_conv_entry(&alice_conv, &bob_card, epoch, b"addressed msg");
+        let unlabelled = make_entry(&bob, b"old style");
+
+        let block = Block::new(epoch, [0u8; 32], vec![labelled, unlabelled]);
+
+        let msgs = trial_decrypt(&bob, &block);
+        assert_eq!(msgs.len(), 2, "trial_decrypt should still find both");
+        assert!(msgs.contains(&b"addressed msg".to_vec()));
+        assert!(msgs.contains(&b"old style".to_vec()));
+
+        // Alice_card owner can't decrypt Bob's messages
+        let alice_msgs = trial_decrypt(&alice, &block);
+        assert!(alice_msgs.is_empty());
     }
 }

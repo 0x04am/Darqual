@@ -2,14 +2,18 @@
 
 pub mod address;
 pub mod contact;
+pub mod conversation;
 pub mod error;
 pub mod identity;
+pub mod label;
 pub mod lockbox;
 
 pub use address::DarqualAddress;
 pub use contact::ContactCard;
+pub use conversation::Conversation;
 pub use error::{Error, Result};
 pub use identity::Identity;
+pub use label::Label;
 pub use lockbox::Lockbox;
 
 #[cfg(test)]
