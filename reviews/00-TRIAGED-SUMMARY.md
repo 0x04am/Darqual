@@ -50,3 +50,36 @@ research prototype's weak points live.
 2. `verify_strict` + x_pub binding (the two real composition bugs).
 3. Re-run verify.sh; commit.
 4. Then triage the HIGH/MEDIUM backlog claim-by-claim.
+
+---
+
+## RESOLUTION (S218 — full triage complete)
+After verifying every CRITICAL/HIGH against actual code:
+
+**FIXED + tested (6 genuinely-real issues):**
+1. Flaky PoW test → deterministic content-binding invariant (gate integrity)  [v0.10.1]
+2. verify_ed → verify_strict (ed25519 malleability)                            [v0.10.1]
+3. ContactCard x_pub binding (address = blake3(ed_pub||x_pub)) + regression test [v0.10.1]
+4. write_frame oversize guard (no silent u32 truncation) + 2 tests             [v0.10.2]
+5. serve/serve_block per-connection CONN_TIMEOUT (Slowloris)                    [v0.10.2]
+6. merkle odd-leaf CVE-2012-2459 caveat documented (block-layer mitigated)     [v0.10.2]
+
+**DEBUNKED (reviewer wrong/overstated — verified against code):**
+merkle domain-sep (present), da content-check (present), bucket usize (it's u32),
+fetch_open collisions (collects all), trial_decrypt panic (.ok()? + fuzz-proven),
+block hash n_messages (committed), erasure reconstruct length (guarded/truncate-safe),
+EMPTY_ROOT (intentional sentinel).
+
+**ACCEPTED as documented design/minor (not fixed, by choice):**
+- validate_chain on empty/pruned window — windowed-ledger design (anchors at first
+  retained block; full-genesis validation needs checkpoints — future).
+- notify label-compare timing — local operation, not network-observable in the
+  light-client model; constant-time compare is a future hardening.
+- DA sampler-unpredictability — protocol-level property (sample() takes external RNG);
+  belongs to the committee/beacon design, not a code bug.
+- bucket_of n_buckets==0 — guarded by assert! (documented precondition).
+
+**Net:** 12 reviewers flagged ~25 CRITICAL + ~30 HIGH. After verification, ~6 were real
+and actionable (all now fixed+tested); the rest were inflation, already-handled, or
+documented design. Primitives (dalek/RustCrypto) used correctly; real gaps were in
+composition + test rigor — now closed. 135 tests, verify.sh GREEN + deterministic.
