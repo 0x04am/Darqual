@@ -24,6 +24,48 @@ Granular boxes below are NOT individually re-ticked — trust `STATUS.md` + the 
 
 ---
 
+## ⚠️ OPEN STRATEGIC FORK — Mission A vs Mission B (S222, UNDECIDED)
+> **Status: NOT decided. Locked-on-disk = A; lived-evidence = B. Resolve rested.** SPEC §1 currently
+> declares **Mission A** (anonymity research vs a *global passive observer* — hide a *population's*
+> social graph from the dragnet; explicitly NOT a personal-safety tool). But across S222, Haseeb's
+> instincts kept landing on **Mission B** — protect a *specific vulnerable individual* from a
+> *local/targeting* adversary (asylum seeker, trans person in a hostile household, etc.). The
+> clinching example: *"if you're the only Tor user in a house of 5, that fingerprint can out you as
+> trans"* — a local-observer, protect-this-person threat. That's B, top to bottom. **The mission
+> question is the highest-leverage open decision in the project — it re-orders everything below.**
+
+| | **Mission A** (current SPEC) | **Mission B** (the pull) |
+|---|---|---|
+| Protects | a *population's* metadata vs *mass* observation | a *vulnerable individual* vs a *local/targeting* adversary |
+| Beneficiary | the dragnet-privacy commons, at scale, someday | the trans kid in the hostile house, today |
+| Priority #1 | dead-drop wiring (note 19) → cover traffic → committees/PIR research | **traffic obfuscation** → stealth app → duress wipe → offline transport → endpoint → mobile → audit (the Briar list) |
+| Paper potential | maybe (SoK / committee sub-result) | low — it's a *product/safety* mission, not research |
+| Honest verdict | defensible, abstract, "no urgent user" | more human, more useful to real people, **bigger build** |
+
+**Decision rule when resolving:** pick ONE (or a *deliberate, eyes-open* A+B with the doubled
+scope). Do NOT let B-features drift into an A-framed project by accident — that's the incoherence
+S222 paid to fix. Whatever wins, re-aim SPEC/THREAT-MODEL/README to match (again).
+
+### Mission-B branch — the work it would unlock (NOT on the A roadmap; contingent on the fork)
+> If B wins, these jump to the top, ahead of the dead-drop research. Most are *engineering*, not research.
+- **Bx.1 Traffic obfuscation / pluggable transports** — hide that you're even using Tor (defeats the
+  "only Tor user in the house outs you" + "Tor-is-blocked/suspicious" threats). Wire **obfs4**
+  ("look like noise") and/or **Snowflake** ("look like WebRTC video") into Arti. Note: domain-fronting/
+  meek ("look like web/HTTPS") is largely dead (Google/Amazon killed it ~2018) — obfs4/Snowflake are
+  the live tools. Honest ceiling: *raise the cost of detection*, not perfect invisibility (censors also
+  fingerprint traffic *shape*, not just bytes).
+- **Bx.2 Stealth / disguisable client** — the app on the device is itself the tell (a household member
+  with physical access sees the icon). Disguised app / hidden mode / decoy.
+- **Bx.3 Duress + panic wipe** — duress password, panic-wipe identity/sessions; plausible deniability.
+- **Bx.4 Offline / shutdown-resilient transport** — Bluetooth/LAN mesh (the Briar move) — works when
+  the state cuts the net. The single biggest real-world B feature Tor-only can't give.
+- **Bx.5 Endpoint hardening guidance + mobile app + external audit** — the things that actually decide
+  whether a real person is safe.
+> ⚠️ Reality check that *forces* the fork: obfuscation ALONE doesn't save the trans kid — the
+> physical-access family member still sees the app. Serving B = the *whole* stack above, not one feature.
+
+---
+
 ## STAGE 0 — Foundation (v0.0.x)  ✅ DONE (tag v0.0.1)
 **Goal:** cryptographic identity + lockboxes + CLI. No network.
 
@@ -75,6 +117,9 @@ Granular boxes below are NOT individually re-ticked — trust `STATUS.md` + the 
 - [x] send/receive between two online peers; manual address exchange; `darqual-tor-node` binary
 - [~] connection mgmt, retries, timeouts — basic; daemon hardening deferred
 - [~] integration test: session round-trip proven Tor-free in `darqual-core`; live 2-node Tor = manual
+- [ ] **Traffic obfuscation / pluggable transports (obfs4 / Snowflake)** — hide that you're using Tor
+      at all. NOT a Mission-A item; see the "Mission-B branch → Bx.1" under the OPEN STRATEGIC FORK
+      above. Contingent on resolving A vs B.
 
 ## STAGE 2 — Ledger (v0.2.x)
 **Goal:** epoch blocks, hot-window replication, trial-decrypt.
