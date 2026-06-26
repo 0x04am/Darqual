@@ -40,6 +40,12 @@ impl Conversation {
         }
     }
 
+    /// 32-byte symmetric shared secret from the static-static ECDH.
+    /// Used as the Double Ratchet root-key seed (SK in Signal terms).
+    pub fn shared_secret(&self) -> &[u8; 32] {
+        &self.shared
+    }
+
     /// Derive the dead-drop label for a given epoch.
     ///
     /// Uses `blake3::keyed_hash` with the shared secret as the key.

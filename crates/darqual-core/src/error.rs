@@ -31,6 +31,9 @@ pub enum Error {
 
     #[error("Identity already exists at {0} — use --force to overwrite")]
     IdentityExists(String),
+
+    #[error("Ratchet error: {0}")]
+    Ratchet(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

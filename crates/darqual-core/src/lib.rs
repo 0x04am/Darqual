@@ -9,6 +9,7 @@ pub mod keywheel;
 pub mod label;
 pub mod lockbox;
 pub mod pow;
+pub mod ratchet;
 
 pub use address::DarqualAddress;
 pub use contact::ContactCard;
@@ -19,6 +20,7 @@ pub use keywheel::Keywheel;
 pub use label::Label;
 pub use lockbox::Lockbox;
 pub use pow::{leading_zero_bits, mint as pow_mint, pow_hash, pow_valid, POW_DOMAIN};
+pub use ratchet::{Header, RatchetMessage, RatchetSession, MAX_SKIP, MAX_SKIP_STORE};
 
 #[cfg(test)]
 mod tests {
