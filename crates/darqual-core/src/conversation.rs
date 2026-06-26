@@ -13,6 +13,16 @@ use crate::lockbox::Lockbox;
 /// distinct from any key material derived elsewhere.
 const LABEL_DOMAIN: &[u8] = b"darqual-deaddrop-v1";
 
+/// SK = the symmetric static-static X25519 secret derived from a raw peer x25519
+/// public key. MUST produce identical bytes to
+/// `Conversation::new(me, peer_card).shared_secret()`. Used by the session layer
+/// where the responder only knows the sender's raw `x_pub` (from the wire frame),
+/// not a full `ContactCard`.
+pub fn shared_secret_with(me: &Identity, peer_x_pub: &[u8; 32]) -> [u8; 32] {
+    let their = X25519PublicKey::from(*peer_x_pub);
+    *me.x_secret.diffie_hellman(&their).as_bytes()
+}
+
 /// A shared conversation context between two parties.
 /// Holds the ECDH shared secret; never prints it.
 pub struct Conversation {
@@ -33,10 +43,8 @@ impl Conversation {
     /// Symmetric: `Conversation::new(alice, bob_card)` and
     /// `Conversation::new(bob, alice_card)` yield the same shared secret.
     pub fn new(me: &Identity, them: &ContactCard) -> Self {
-        let their_x_pub = X25519PublicKey::from(them.x_pub);
-        let shared = me.x_secret.diffie_hellman(&their_x_pub);
         Conversation {
-            shared: *shared.as_bytes(),
+            shared: shared_secret_with(me, &them.x_pub),
         }
     }
 

@@ -119,6 +119,11 @@ impl Identity {
         self.signing_key.verifying_key().to_bytes()
     }
 
+    /// The x25519 public key bytes for this identity.
+    pub fn x_pub(&self) -> [u8; 32] {
+        X25519PublicKey::from(&self.x_secret).to_bytes()
+    }
+
     /// Default identity path: ~/.darqual/identity.toml
     pub fn default_path() -> Result<PathBuf> {
         let home = dirs::home_dir().ok_or_else(|| {
