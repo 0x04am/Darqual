@@ -9,42 +9,91 @@ Full architecture rationale + the 7-paper synthesis live in
 
 ---
 
-## 1. What Darqual is (and is not)
+## 1. Mission & what Darqual is (and is not)
+
+> **MISSION (locked S222): Darqual is an anonymity *research* system.** Its single
+> optimization target is **metadata-darkness against a global passive observer** — making
+> *"who is talking to whom, and when?"* unanswerable to an adversary that watches all network
+> traffic and controls a dishonest supermajority of participants (anytrust per epoch).
+> Everything else is subordinate to that one goal.
+
 - **Is:** a serverless, metadata-resistant comms network where messages are per-recipient
   encrypted "lockboxes," sends and receives are both unlinkable, and the question
   *"who is talking to whom?"* is unanswerable to a global observer.
 - **Is not:** a real-time WhatsApp clone. Darqual is **async by nature** (the latency *is* the
   anonymity — Anonymity Trilemma, Das et al. S&P'18). Think: *email even a nation-state can't
   social-graph,* with an opt-in real-time channel for two online peers who accept the tradeoff.
-- **Target user:** nation-state threat model — journalists, dissidents, sources, whistleblowers.
+- **Is NOT (mission boundary):** a **personal-safety tool for an individual a hostile state is
+  hunting.** Darqual protects *the network's* metadata against *mass / global* observation; it
+  does **not** protect *a marked person* against *targeted active attack.* See §3a (Anti-goals).
+- **Target adversary:** the global passive observer + dishonest supermajority. Beneficiaries are
+  populations whose *aggregate* communications metadata would otherwise be dragnet-harvested —
+  not a specific dissident whose phone is already in the crosshairs of Pegasus-grade tooling.
+
+## 3a. Anti-goals — who/what Darqual does NOT protect (read before trusting it)
+
+Honesty is the first security property. Under Mission A, these are **explicitly out of scope**,
+and no amount of crypto on the wire fixes them:
+
+- **Endpoint compromise.** Targeted spyware (Pegasus-grade) reads plaintext on the screen
+  before/after encryption. This defeats *all* message crypto — Darqual, Signal, anything. For a
+  *targeted* user this is the dominant risk, and Darqual does not address it.
+- **Targeted nation-state with physical access.** Device seizure, border search, raids — the
+  identity, sessions, and contact cards live on the device.
+- **Coercion / duress.** Rubber-hose key extraction. No panic-wipe, no duress password, no
+  plausible-deniability hidden volume. Message *deniability* protects you from a courtroom — not
+  from a regime that doesn't use courtrooms.
+- **Internet shutdowns.** Darqual is Tor-only. When a state cuts or throttles the net (the common
+  move during protests), Darqual is a brick. (Briar's Bluetooth/LAN mesh is the answer there —
+  Darqual deliberately does not chase it.)
+- **Tool-usage detectability.** Vanilla Tor is fingerprintable by a national firewall; Darqual
+  has no pluggable transports. In regimes where *using* a circumvention tool is itself the crime,
+  the encryption never gets a chance to matter.
+- **Safe first contact under danger.** No anonymous discovery (IBE add-friend is research);
+  bootstrapping a contact requires a pre-existing secure channel.
+
+> **If a nation-state is hunting you specifically, Darqual is not your shield.** Get physically
+> out, with help; use Briar/Signal + operational security + physical safety. Darqual is research
+> into *mass* metadata-darkness, not a bodyguard for a marked individual.
 
 ## 2. Security goals
 | Property | Guarantee |
 |---|---|
 | Content confidentiality | E2E AEAD; only the recipient can read |
 | Recipient anonymity | observer can't tell who a lockbox is for |
-| Sender anonymity | observer can't tell who sent it |
+| Sender anonymity (to network) | observer can't tell who sent it |
+| Sender authentication (deniable) | recipient knows it's you; can't prove it to a third party (Noise IK, S222) |
 | Contact-graph privacy | who-talks-to-whom is hidden |
 | Integrity / tamper-evidence | AEAD + Merkle-linked ledger |
-| Forward secrecy | per-epoch label rotation + ratchet (later stages) |
-| Sybil/spam resistance | anonymous rate-limiting (RLN), no payment graph |
+| Forward secrecy + post-compromise | per-msg message keys + DH ratchet self-heal (Double Ratchet, S222 ✅) |
+| Header / metadata privacy | ratchet headers encrypted — no linkable pubkeys/counters on the wire (S222) |
+| Sybil/spam resistance | anonymous rate-limiting (PoW now; RLN research), no payment graph |
 | Availability under churn | erasure coding + data-availability sampling |
 
 **Non-goal (v0):** defeating a *global active* adversary that corrupts an entire epoch
 committee. We make it economically/cryptographically hard, not impossible.
 
 ## 3. Threat model
-- **Adversary:** global passive observer + dishonest *supermajority* of participants.
+- **In scope (what we defend):** a **global passive observer** that watches all network traffic,
+  plus a **dishonest supermajority** of participants (anytrust per epoch: ≥1 honest member in
+  each epoch's elected committee). Goal: this adversary cannot answer *who-talks-to-whom-when*.
+- **Out of scope (see §3a):** a global *active* adversary that corrupts an entire epoch's
+  committee; **endpoint compromise**; a state mounting **targeted** physical/coercive/malware
+  attacks on a specific person; **internet shutdowns**; detection that you're *using* the tool.
 - **Trust:** **anytrust per epoch** — ≥1 honest member in each epoch's elected committee.
-- **Transport:** Tor v3 onion services (location hiding + self-authenticating addresses),
-  optional Loopix mix layer for global-passive resistance.
+- **Transport:** Tor v3 onion services (location hiding + self-authenticating addresses) — **LIVE
+  (S222)**. Optional Loopix mix layer for added global-passive resistance = research.
 
 ## 4. Core primitives (the vocabulary)
 - **Identity:** ed25519 keypair (signing/identity) + X25519 keypair (encryption).
 - **Darqual Address:** `dq1` + base32(BLAKE3(ed_pub || x_pub)[..20])` — self-authenticating, commits to BOTH signing + encryption keys.
 - **Contact string:** address + both public keys, shareable out-of-band.
-- **Lockbox:** an anonymous sealed-box — `ephemeral_x25519_pub || nonce || AEAD(msg)` —
-  encrypted to a recipient's X25519 key. Sender identity is NOT in the lockbox (anonymous).
+- **Lockbox:** the message envelope. **v1** = anonymous sealed box (`ephemeral_x25519 ‖ nonce ‖
+  AEAD`), no sender identity. **v2 (S222)** = Noise IK — adds a static-static DH term for
+  **deniable sender authentication** with the sender's identity encrypted *inside* the AEAD
+  (authenticated to the recipient, hidden from the network). v2 is the session **bootstrap**.
+- **Session (S222):** once bootstrapped, ongoing messages use a **Double Ratchet** (per-message
+  forward secrecy + post-compromise security) with **encrypted headers**. Persisted per-peer.
 - **Dead-drop label (later):** per-epoch PRF(shared_secret, epoch) → the slot a lockbox lives in.
 - **Epoch:** a fixed time window; unit of ledger commit, committee rotation, label rotation.
 - **Block:** the set of lockboxes committed in an epoch; Merkle-rooted, hash-linked to prior.

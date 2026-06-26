@@ -2,7 +2,13 @@
 
 **Status: RESEARCH PROTOTYPE. NOT AUDITED. Do NOT use to protect real people yet.**
 This documents what Darqual defends, by which mechanism, and — just as important — what it
-does NOT yet defend. Honesty is the security property that comes first.
+does NOT defend. Honesty is the security property that comes first.
+
+> **MISSION A (locked S222):** Darqual is anonymity *research* — its target is **metadata-
+> darkness against a global passive observer** (hide who-talks-to-whom from mass/dragnet
+> observation). It is **NOT** a personal-safety tool for an individual a hostile state is
+> hunting. See "Explicitly NOT for" below — that boundary is part of the security model, not a
+> disclaimer footnote.
 
 ---
 
@@ -17,14 +23,37 @@ does NOT yet defend. Honesty is the security property that comes first.
 
 ---
 
+## Explicitly NOT for (Mission A boundary — out of scope by design)
+These are not bugs or TODOs — they are *outside the mission*. Darqual targets *mass* metadata
+observation, not the protection of a *marked individual*. No wire crypto fixes any of these:
+- **Endpoint compromise** (Pegasus-grade spyware) — reads plaintext on-device, defeats all
+  message crypto. For a *targeted* person this is the dominant risk; Darqual does not address it.
+- **Targeted nation-state w/ physical access** — seizure, border search, raids.
+- **Coercion / duress** — rubber-hose key extraction; no panic-wipe / duress-password /
+  hidden-volume. Deniability stops a courtroom, not a regime that skips courtrooms.
+- **Internet shutdowns** — Tor-only; dies when the net is cut. (Briar's BT/LAN mesh is that
+  answer; Darqual deliberately does not chase it.)
+- **Tool-usage detection** — vanilla Tor is fingerprintable; no pluggable transports. Where
+  *using* a circumvention tool is itself the crime, encryption never gets to matter.
+- **Safe first contact under danger** — no anonymous discovery; bootstrap needs a pre-existing
+  secure channel.
+
+> If a nation-state is hunting *you specifically*: Darqual is not your shield. Use Briar/Signal
+> + opsec + physical safety, and get out with help.
+
+---
+
 ## Security goals — defended / mechanism / status
 
 | Goal | Mechanism (stage) | Status |
 |---|---|---|
 | **Content confidentiality** | x25519 ECDH + ChaCha20-Poly1305 lockbox (S0) | ✅ implemented + tested |
-| **Sender anonymity (content)** | ephemeral-key sealed box — no sender identity in envelope (S0) | ✅ implemented + tested |
-| **Recipient anonymity** | hold-all + trial-decrypt; dead-drop labels; cover traffic (S2/S3/S8) | ✅ mechanism implemented + tested |
-| **Contact-graph privacy** | labels unlinkable to identity; per-epoch rotation (S3) | ✅ implemented + tested |
+| **Sender anonymity (to network)** | ephemeral-key sealed box — no sender identity on the wire (S0) | ✅ implemented + tested |
+| **Sender auth — deniable** | Noise IK static-static DH; sender id encrypted inside AEAD (S222) | ✅ implemented + tested |
+| **Content forward secrecy + PCS** | Double Ratchet — per-msg keys + DH ratchet self-heal (S222) | ✅ implemented + tested |
+| **Header / metadata privacy** | encrypted ratchet headers — no linkable pubkeys/counters (S222) | ✅ implemented + tested |
+| **Recipient anonymity** | hold-all + trial-decrypt; dead-drop labels; cover traffic (S2/S3/S8) | 🟡 lib built; NOT wired into node path |
+| **Contact-graph privacy** | labels unlinkable to identity; per-epoch rotation (S3) | 🟡 lib built; node still direct-dials |
 | **Integrity / tamper-evidence** | AEAD + blake3 Merkle blocks + hash-linked chain (S0/S2) | ✅ implemented + tested |
 | **Forward-secret metadata** | keywheel hash-ratchet — past labels unrecoverable after seizure (S7) | ✅ implemented + tested |
 | **Spam / Sybil resistance** | Proof-of-Work gate, difficulty-enforced (S4) | ✅ PoW tier; RLN = research |
@@ -37,12 +66,16 @@ does NOT yet defend. Honesty is the security property that comes first.
 
 ## Per-goal argument (the honest reasoning)
 
-**Content confidentiality / sender anonymity.** Each message is an anonymous sealed box: a fresh
-ephemeral x25519 key per message, ECDH to the recipient's static key, blake3-KDF, ChaCha20-Poly1305.
-The envelope carries `ephemeral_pub‖nonce‖ciphertext` and NO sender identity. Only the recipient's
-static key opens it. *Residual:* no post-compromise security on the recipient's static key — a seized
-recipient key opens all past lockboxes addressed to it (forward secrecy for content is future work;
-the keywheel currently protects metadata, not content keys).
+**Content confidentiality / sender anonymity.** Each first-contact message is a Noise-IK lockbox: a
+fresh ephemeral x25519 key, ECDH to the recipient's static key, blake3-KDF, ChaCha20-Poly1305, with
+the sender's static identity encrypted *inside* the AEAD (deniable auth — the recipient is convinced
+it's you but cannot prove it to a third party, since the static-static DH is symmetric and forgeable
+by the recipient). Ongoing messages run a **Double Ratchet**: per-message message keys (forward
+secrecy — a seized key cannot decrypt earlier messages) + a DH ratchet that re-keys every round-trip
+(post-compromise security / self-healing) + **encrypted headers** (no linkable pubkeys/counters on
+the wire). *Residual (S222 closed the old one):* the prior "seized static key opens all past
+lockboxes" gap is GONE for session traffic; a one-shot v1 lockbox (sessionless bootstrap) still has
+only sender-side FS. Endpoint compromise still defeats everything (see "Explicitly NOT for").
 
 **Recipient anonymity / contact-graph privacy.** Two parties derive a per-epoch dead-drop label from
 a shared secret (static-static ECDH, then keywheel-ratcheted). An observer sees labels but cannot
@@ -74,12 +107,17 @@ construction — production must use standard ECVRF (RFC 9381).
 ---
 
 ## Known gaps (do not pretend these are closed)
-1. **No real anonymity network yet** — transport is TCP, not Tor/Arti. IP-level location privacy is
-   NOT yet provided. (Arti onion-service swap = the next transport increment.)
+1. **Anonymity layer not wired into the running node** — Tor transport is LIVE (S222) and content
+   crypto (deniable auth + FS/PCS + encrypted headers) is wired, but the node still does a **direct
+   onion dial, both-online**. The dead-drop ledger / keywheel labels / cover traffic exist as
+   *libraries* and are NOT yet in the send/receive path. So who-talks-to-whom darkness is, in the
+   running node *today*, still aspirational — Tor hides IPs, but it's a direct connection, not async
+   dead-drops. **This is the #1 gap to close next.**
 2. **PIR not implemented** — networked retrieval by label leaks the label. Whole-block fetch avoids
    intra-block leak but doesn't scale; PIR is the real fix.
 3. **Full RLN / DPF / IBE / Loopix-Sphinx** — all documented, none implemented (research-grade crypto).
-4. **Content forward secrecy / post-compromise security** — not implemented (no Double Ratchet yet).
+4. **No anonymous discovery / safe bootstrap** — contact add needs a pre-existing secure channel
+   (IBE add-friend is research). For the mission this is a gap, not a blocker.
 5. **Anonymity Trilemma** — strong-anonymity + low-latency + low-bandwidth can't coexist; Darqual is
    deliberately ASYNC. It is not a real-time messenger and does not claim global-active-adversary
    resistance.
@@ -88,15 +126,24 @@ construction — production must use standard ECVRF (RFC 9381).
 
 ---
 
-## Before this protects a real person, it needs (Stage 10, mostly NOT autonomously possible)
+## Before this is a credible anonymity-research deployment (Mission A; mostly NOT autonomously possible)
 - [ ] External professional security audit
-- [ ] Tor/Arti transport (kill the IP-leak)
+- [x] Tor/Arti transport (S222 — IP-leak killed)
+- [x] Content forward secrecy + PCS (Double Ratchet, S222)
+- [ ] **Wire the dead-drop ledger / keywheel / cover traffic into the node** (close gap #1 — the
+      jump from direct-dial to async metadata-darkness; this is the mission's core, and it's
+      *engineering*, not research)
 - [ ] PIR retrieval (close the label-fetch leak)
-- [ ] Content forward secrecy (Double Ratchet)
 - [ ] Constant-time review of all secret-dependent paths
 - [ ] Real closed beta with adversarial testing
 - [x] Threat-model document (this file)
-- [~] Property + fuzz-style parser tests (v0.10.0)
+- [x] Property + fuzz-style parser tests (v0.10.0)
 
-**Bottom line:** Darqual is a working, tested *spine* of a metadata-resistant messenger with every
-tractable mechanism implemented and honestly labeled. It is a research prototype. Treat it as one.
+> Note: "protects a real *targeted* person" is **out of mission** (see "Explicitly NOT for"). This
+> list is about Darqual being a credible *anonymity system against mass observation*, not a
+> bodyguard for a marked individual.
+
+**Bottom line:** Darqual is a working, tested *spine* of a metadata-resistant messenger with
+strong content crypto (deniable auth + FS/PCS + encrypted headers) live over Tor, and every other
+tractable mechanism built as a library and honestly labeled. The anonymity layer is built but not
+yet wired into the running node. It is a research prototype. Treat it as one.
