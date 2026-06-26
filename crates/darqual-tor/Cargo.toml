@@ -22,6 +22,7 @@ tracing = "0.1"
 anyhow = "1"
 darqual-core = { path = "../darqual-core" }
 clap = { version = "4", features = ["derive"] }
+bincode = "1"
 
 [[bin]]
 name = "darqual-tor-node"
