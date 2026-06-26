@@ -11,8 +11,9 @@ darqual-ledger = { path = "../darqual-ledger" }
 blake3         = "1"
 rand           = "0.8"
 thiserror      = "1"
+x25519-dalek   = { version = "2", features = ["static_secrets"] }
 
 [dev-dependencies]
 rand        = { version = "0.8", features = ["std_rng"] }
 rand_chacha = "0.3"
-x25519-dalek = "2"
+x25519-dalek = { version = "2", features = ["static_secrets"] }

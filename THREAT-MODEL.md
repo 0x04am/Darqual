@@ -121,7 +121,11 @@ construction — production must use standard ECVRF (RFC 9381).
 5. **Anonymity Trilemma** — strong-anonymity + low-latency + low-bandwidth can't coexist; Darqual is
    deliberately ASYNC. It is not a real-time messenger and does not claim global-active-adversary
    resistance.
-6. **No external audit. No formal proofs. No constant-time guarantees reviewed.** The crypto uses
+6. **Message-size leak — closed to coarse buckets.** Fixed-bucket padding (`padding.rs`, ladder
+   `[256, 1k, 4k, 16k, 64k, 256k]`) wraps every lockbox + ratchet plaintext before AEAD; cover
+   envelopes go through the same path. Residual: bucket-level inference (an observer learns which
+   bucket, not the exact length).
+7. **No external audit. No formal proofs. No constant-time guarantees reviewed.** The crypto uses
    vetted primitives (dalek, RustCrypto) but the *composition* is unaudited.
 
 ---

@@ -331,7 +331,7 @@ impl RatchetSession {
         let enc_header = henc(hks, &header.to_bytes())?;
         self.ns += 1;
 
-        let ct = aead_seal(&mk, plaintext, &enc_header)?;
+        let ct = aead_seal(&mk, &crate::padding::pad(plaintext), &enc_header)?;
         Ok(RatchetMessage {
             enc_header,
             ciphertext: ct,
@@ -362,7 +362,8 @@ impl RatchetSession {
         self.ckr = Some(ckr_next);
         self.nr += 1;
 
-        aead_open(&mk, &msg.ciphertext, &msg.enc_header)
+        let padded = aead_open(&mk, &msg.ciphertext, &msg.enc_header)?;
+        crate::padding::unpad(&padded)
     }
 
     // ── internals ─────────────────────────────────────────────────────────────
@@ -401,7 +402,8 @@ impl RatchetSession {
             if let Some(pos) = self.skipped_order.iter().position(|k| k == &key) {
                 self.skipped_order.remove(pos);
             }
-            return Ok(Some(aead_open(&mk, &msg.ciphertext, &msg.enc_header)?));
+            let padded = aead_open(&mk, &msg.ciphertext, &msg.enc_header)?;
+            return Ok(Some(crate::padding::unpad(&padded)?));
         }
         Ok(None)
     }

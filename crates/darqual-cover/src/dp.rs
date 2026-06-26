@@ -140,7 +140,7 @@ pub fn add_dp_cover(entries: &mut Vec<LedgerEntry>, epsilon: f64, rng: &mut impl
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cover::COVER_ENVELOPE_LEN;
+    use crate::cover::cover_envelope_len;
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
@@ -271,9 +271,9 @@ mod tests {
         for e in &entries {
             assert_eq!(
                 e.envelope.len(),
-                COVER_ENVELOPE_LEN,
+                cover_envelope_len(),
                 "DP cover entry envelope length must be canonical ({})",
-                COVER_ENVELOPE_LEN
+                cover_envelope_len()
             );
         }
     }

@@ -90,7 +90,8 @@ impl Lockbox {
         let shared = eph_secret.diffie_hellman(recipient_x_pub);
         let key_bytes = blake3::derive_key(KDF_CONTEXT_V1, shared.as_bytes());
         let nonce_bytes = random_nonce();
-        let ct = aead_encrypt(key_bytes, nonce_bytes, msg)?;
+        let padded = crate::padding::pad(msg);
+        let ct = aead_encrypt(key_bytes, nonce_bytes, &padded)?;
 
         // Wire: [V1 1][eph_pub 32][nonce 12][ct ...]
         let mut wire = Vec::with_capacity(1 + 32 + 12 + ct.len());
@@ -146,9 +147,10 @@ impl Lockbox {
         let ss = sender.x_secret.diffie_hellman(&bob_x_pub);
         let k1 = kdf_ess(es.as_bytes(), ss.as_bytes());
 
-        // msg: encrypt under k1
+        // msg: encrypt under k1 (padded to fixed bucket → no length leak).
         let nonce1 = random_nonce();
-        let enc_msg = aead_encrypt(k1, nonce1, msg)?;
+        let padded = crate::padding::pad(msg);
+        let enc_msg = aead_encrypt(k1, nonce1, &padded)?;
 
         // Wire v2: [V2 1][eph_pub 32][nonce0 12][enc_s 48][nonce1 12][enc_msg ...]
         let mut wire = Vec::with_capacity(1 + 32 + 12 + 48 + 12 + enc_msg.len());
@@ -235,6 +237,7 @@ fn open_v1(identity: &Identity, wire: &[u8]) -> Result<(Vec<u8>, Option<[u8; 32]
     let key_bytes = blake3::derive_key(KDF_CONTEXT_V1, shared.as_bytes());
 
     let plaintext = aead_decrypt(key_bytes, nonce_bytes, ct)?;
+    let plaintext = crate::padding::unpad(&plaintext)?;
     Ok((plaintext, None))
 }
 
@@ -276,6 +279,7 @@ fn open_v2(identity: &Identity, wire: &[u8]) -> Result<(Vec<u8>, Option<[u8; 32]
 
     // Decrypt enc_msg — AEAD success IS the authentication
     let plaintext = aead_decrypt(k1, nonce1, enc_msg)?;
+    let plaintext = crate::padding::unpad(&plaintext)?;
     Ok((plaintext, Some(alice_x_pub_bytes)))
 }
 
@@ -423,7 +427,7 @@ mod tests {
         let k1 = kdf_ess(es.as_bytes(), ss.as_bytes());
 
         let nonce1 = random_nonce();
-        let enc_msg = aead_encrypt(k1, nonce1, msg).expect("enc_msg failed");
+        let enc_msg = aead_encrypt(k1, nonce1, &crate::padding::pad(msg)).expect("enc_msg failed");
 
         let mut wire = Vec::new();
         wire.push(V2);
