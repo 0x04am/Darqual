@@ -62,7 +62,7 @@ pub fn host(client: &Client, nickname: &str, _port: u16) -> anyhow::Result<Host>
         .context("launch onion service")?
         .context("onion service disabled in config")?;
     let onion = service
-        .onion_name()
+        .onion_address()
         .context("onion name not yet available")?
         .display_unredacted()
         .to_string();
