@@ -7,7 +7,24 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
-## STAGE 0 — Foundation (v0.0.x)  ⟵ BUILDING NOW
+## ⚠️ STATUS RECONCILIATION (S222, 2026-06-26) — read this first
+This roadmap is the **original pre-build plan** (S218) and its granular `[ ]` boxes were never
+ticked. **`STATUS.md` is the authoritative, evidence-based tracker.** Stage-level reality:
+
+| Stage | Reality | Stage | Reality |
+|---|---|---|---|
+| 0 Foundation | ✅ done (v0.0.1) | 6 Committees | 🟡 VRF election only; anytrust+sybil = research |
+| 1 Transport | ✅ **LIVE TOR** (S222) | 7 Discovery | 🟡 keywheel only; IBE add-friend = research |
+| 2 Ledger | ✅ done | 8 Metadata harden | 🟡 cover+DP done; Loopix = research |
+| 3 Addressing/notify | ✅ done (label-based) | 9 Clients | 🟡 light-client; UI/groups deferred |
+| 4 Write path | 🟡 PoW spam (DPF = research) | 10 Hardening/audit | 🟡 partial; ext. audit = blocked |
+| 5 Storage scaling | ✅ done (RS+DA) | **Content-crypto** | ✅ **S222, see bottom** |
+
+Granular boxes below are NOT individually re-ticked — trust `STATUS.md` + the per-stage tags.
+
+---
+
+## STAGE 0 — Foundation (v0.0.x)  ✅ DONE (tag v0.0.1)
 **Goal:** cryptographic identity + lockboxes + CLI. No network.
 
 ### 0.1 Workspace scaffold
@@ -48,15 +65,16 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
-## STAGE 1 — Transport (v0.1.x)
+## STAGE 1 — Transport (v0.1.x)  ✅ DONE — LIVE TOR (S222)
 **Goal:** onion-to-onion, both-online messaging (Ricochet-level).
-- [ ] `darqual-net` crate; integrate `arti-client` (embedded Tor)
-- [ ] publish a v3 onion service per node; identity-key ↔ onion-key binding
-- [ ] dial a peer's onion address; framed length-prefixed wire protocol
-- [ ] Noise handshake (`snow`) over the circuit for E2E + forward secrecy
-- [ ] send/receive a lockbox between two online peers; manual address exchange
-- [ ] connection mgmt, retries, timeouts; `darqual-node` daemon skeleton
-- [ ] integration test: two nodes on local Tor exchange a message
+- [x] `darqual-tor` crate; integrate `arti-client` (embedded Tor) — live bootstrap
+- [x] publish a v3 onion service per node; host + dial over live Tor
+- [x] dial a peer's onion address; framed wire protocol (`[sender_x_pub][bincode(RatchetMessage)]`)
+- [x] E2E + forward secrecy over the circuit — done via **hand-rolled Noise IK + Double Ratchet**
+      (NOT `snow`; see content-crypto track at bottom), not a circuit-level Noise handshake
+- [x] send/receive between two online peers; manual address exchange; `darqual-tor-node` binary
+- [~] connection mgmt, retries, timeouts — basic; daemon hardening deferred
+- [~] integration test: session round-trip proven Tor-free in `darqual-core`; live 2-node Tor = manual
 
 ## STAGE 2 — Ledger (v0.2.x)
 **Goal:** epoch blocks, hot-window replication, trial-decrypt.
@@ -126,3 +144,40 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - [ ] constant-time + zeroize discipline on all secret material
 - [ ] benchmark each layer (latency/bandwidth/CPU) against the trilemma budget
 - [ ] keep `SPEC.md` and the research notes in sync with reality
+
+---
+
+## CONTENT-CRYPTO TRACK (S222) — ✅ DONE, not in the original plan
+The original roadmap assumed circuit-level `snow` Noise for E2E. S222 built a proper Signal-grade
+content-crypto stack instead (design notes `14`–`17` in the research folder). All `[x]`,
+verify.sh-green, independently re-verified, **not yet pushed**.
+
+### CC.1 — Lockbox v2: deniable sender auth (Noise IK)  `ce5e699`
+- [x] static-static DH (`ss`) MAC for sender auth; ephemeral (`es`) for confidentiality + FS
+- [x] sender static encrypted inside the AEAD → authenticated to recipient, hidden from network
+- [x] deniable (symmetric `ss` → recipient-forgeable); ed25519 NEVER signs content
+- [x] v1 anonymous boxes preserved (version byte); 6 tests incl. deniability proof
+
+### CC.2 — Double Ratchet: forward secrecy + post-compromise security  `9d46e25`
+- [x] RK root chain + CKs/CKr symmetric chains; per-message message keys (FS)
+- [x] DH ratchet (fresh x25519 per round-trip) → PCS / self-healing
+- [x] out-of-order + skipped-key handling; `MAX_SKIP`/`MAX_SKIP_STORE` DoS bounds
+- [x] serde-persistable; seeds from `Conversation` static-static SK; 7 tests incl. FS+PCS proofs
+
+### CC.3 — Header encryption: metadata-dark headers (Signal HE variant)  `39f2047`
+- [x] 4 header keys (HKs/HKr/NHKs/NHKr) ratcheted from the root chain
+- [x] header trial-decryption (current vs next chain); `dh_pub`/`pn`/`n` all encrypted
+- [x] observer/relay sees opaque `enc_header‖ciphertext`; 9 tests incl. header-privacy
+
+### CC.4 — Session wiring: the node uses it  `b9edb80` (core) + `d2db642` (tor)
+- [x] `SessionStore` — per-peer persisted sessions (`~/.darqual/sessions`, 0600, atomic writes)
+- [x] initiator/responder bootstrap (send-first = initiator); `shared_secret_with` from raw x_pub
+- [x] `darqual-tor-node` host/send rewired onto ratchet sessions over live Tor; 5 session tests
+- [ ] **simultaneous-initiate race** → session-IDs / X3DH prekeys (deferred)
+- [ ] **encrypt session files at rest** (deferred)
+- [ ] **wire keywheel/dead-drop ledger into the node** (still direct onion dial; deferred)
+
+### CC.5 — remaining content-crypto refinements (todo)
+- [ ] fixed-bucket length padding (message-size metadata defense)
+- [ ] drop the sender-tag for established sessions (trial-decrypt across sessions) to shrink metadata
+- [ ] `git push` the S222 work + cut a release tag
