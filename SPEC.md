@@ -17,9 +17,14 @@ Full architecture rationale + the 7-paper synthesis live in
 > traffic and controls a dishonest supermajority of participants (anytrust per epoch).
 > Everything else is subordinate to that one goal.
 
-- **Is:** a serverless, metadata-resistant comms network where messages are per-recipient
-  encrypted "lockboxes," sends and receives are both unlinkable, and the question
-  *"who is talking to whom?"* is unanswerable to a global observer.
+- **Is (by design — the target, not yet the delivered state):** a serverless, metadata-resistant
+  comms network where messages are per-recipient encrypted "lockboxes," sends and receives are
+  both unlinkable, and the question *"who is talking to whom?"* is unanswerable to a global observer.
+- **⚠️ STATUS (do not misread the above as delivered):** as of S222 the running node delivers
+  **content** anonymity (deniable auth, FS/PCS, encrypted headers) over Tor, but **sends/receives
+  are NOT yet unlinkable in practice** — the node still does a *direct onion dial* and the dead-drop
+  / cover-traffic layer that would hide who-talks-to-whom is built as libraries but **not wired in**.
+  Contact-graph privacy is **design intent, not a current guarantee.** See THREAT-MODEL.md gap #1.
 - **Is not:** a real-time WhatsApp clone. Darqual is **async by nature** (the latency *is* the
   anonymity — Anonymity Trilemma, Das et al. S&P'18). Think: *email even a nation-state can't
   social-graph,* with an opt-in real-time channel for two online peers who accept the tradeoff.
@@ -57,18 +62,23 @@ and no amount of crypto on the wire fixes them:
 > into *mass* metadata-darkness, not a bodyguard for a marked individual.
 
 ## 2. Security goals
-| Property | Guarantee |
-|---|---|
-| Content confidentiality | E2E AEAD; only the recipient can read |
-| Recipient anonymity | observer can't tell who a lockbox is for |
-| Sender anonymity (to network) | observer can't tell who sent it |
-| Sender authentication (deniable) | recipient knows it's you; can't prove it to a third party (Noise IK, S222) |
-| Contact-graph privacy | who-talks-to-whom is hidden |
-| Integrity / tamper-evidence | AEAD + Merkle-linked ledger |
-| Forward secrecy + post-compromise | per-msg message keys + DH ratchet self-heal (Double Ratchet, S222 ✅) |
-| Header / metadata privacy | ratchet headers encrypted — no linkable pubkeys/counters on the wire (S222) |
-| Sybil/spam resistance | anonymous rate-limiting (PoW now; RLN research), no payment graph |
-| Availability under churn | erasure coding + data-availability sampling |
+| Property | Guarantee | Status |
+|---|---|---|
+| Content confidentiality | E2E AEAD; only the recipient can read | ✅ wired |
+| Recipient anonymity | observer can't tell who a lockbox is for | 🟡 lib only (not in node) |
+| Sender anonymity (to network) | observer can't tell who sent it | ✅ wired |
+| Sender authentication (deniable) | recipient knows it's you; can't prove it to a third party (Noise IK, S222) | ✅ wired |
+| Contact-graph privacy | who-talks-to-whom is hidden | 🟡 **lib only — node still direct-dials** |
+| Integrity / tamper-evidence | AEAD + Merkle-linked ledger | ✅ wired |
+| Forward secrecy + post-compromise | per-msg message keys + DH ratchet self-heal (Double Ratchet, S222) | ✅ wired |
+| Header / metadata privacy | ratchet headers encrypted — no linkable pubkeys/counters on the wire (S222) | ✅ wired |
+| Sybil/spam resistance | anonymous rate-limiting (PoW now; RLN research), no payment graph | 🟡 lib only |
+| Availability under churn | erasure coding + data-availability sampling | 🟡 lib only |
+
+> **Goal ≠ delivered.** ✅ = live in the running node today. 🟡 = built + tested as a library but
+> **not yet wired into the node's send/receive path** (so it does NOT yet protect a user). The
+> headline "contact-graph privacy" is 🟡 — see THREAT-MODEL.md gap #1. Treat 🟡 rows as design
+> intent, not guarantees.
 
 **Non-goal (v0):** defeating a *global active* adversary that corrupts an entire epoch
 committee. We make it economically/cryptographically hard, not impossible.

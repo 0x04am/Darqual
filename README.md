@@ -3,9 +3,25 @@
 > Metadata-dark, asynchronous, peer-to-peer anonymous messenger.
 > Cryptographic foundation — no network, no metadata, no bullshit.
 
+> ## ⚠️ SAFETY — READ BEFORE TRUSTING THIS WITH ANYTHING
+> **Darqual is a RESEARCH PROTOTYPE. It is NOT audited. Do NOT use it to protect a real person.**
+> - It is **anonymity research** (hide who-talks-to-whom from *mass/global* observation) — **not a
+>   personal-safety tool for someone a state is hunting.**
+> - It does **NOT** protect against: a compromised phone (Pegasus-grade spyware reads your screen),
+>   device seizure, coercion/torture, **internet shutdowns** (it's Tor-only — dies when the net is
+>   cut), or the fact that *using* it may itself be detectable.
+> - **It does not yet even deliver contact-graph privacy in the running app** — the current node
+>   does a *direct connection*; the dead-drop layer that hides who-talks-to-whom is unwired.
+> - **If a government is hunting you specifically, this is not your shield.** Use [Briar](https://briarproject.org)
+>   / Signal + operational security + physical safety, and get out with help.
+>
+> Full accounting: **[THREAT-MODEL.md](THREAT-MODEL.md)** · mission & anti-goals: **[SPEC.md §1/§3a](SPEC.md)**
+
 ## What it is
 
-Darqual is an anonymous messenger built on a cryptographic foundation where the question *"who is talking to whom?"* is unanswerable to a global observer.
+Darqual is an anonymity-research messenger whose *design goal* is to make the question
+*"who is talking to whom?"* unanswerable to a global passive observer. **This is the target, not a
+delivered guarantee** — see the safety banner above and THREAT-MODEL.md for what actually works today.
 
 **v0.0.1** ships the cryptographic primitives:
 - `Identity` — ed25519 (signing) + x25519 (encryption), stored at `~/.darqual/identity.toml`
