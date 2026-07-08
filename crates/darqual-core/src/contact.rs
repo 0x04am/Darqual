@@ -72,11 +72,19 @@ impl ContactCard {
         let ed_pub = decode_hex_32(&wire.ed_pub)?;
         let x_pub = decode_hex_32(&wire.x_pub)?;
 
-        Ok(ContactCard {
+        let card = ContactCard {
             address,
             ed_pub,
             x_pub,
-        })
+        };
+        // Self-authentication is mandatory (F-9): every parse validates that the
+        // address is derived from the embedded keys — callers can't forget.
+        if !card.verify() {
+            return Err(Error::InvalidContactCard(
+                "verification failed: address does not match embedded keys".to_string(),
+            ));
+        }
+        Ok(card)
     }
 }
 
