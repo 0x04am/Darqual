@@ -345,25 +345,33 @@ impl RatchetSession {
             return Ok(pt);
         }
 
-        // 2. Decrypt header (hkr → current chain; nhkr → DH-ratchet step).
-        let (header, do_ratchet) = self.decrypt_header(&msg.enc_header)?;
+        // 2. Clone-and-commit: run all state mutations on a trial copy so a failed
+        //    AEAD (forged/corrupt message) can't permanently corrupt the session.
+        let mut trial = self.clone();
+
+        // Decrypt header (hkr → current chain; nhkr → DH-ratchet step).
+        let (header, do_ratchet) = trial.decrypt_header(&msg.enc_header)?;
 
         if do_ratchet {
-            self.skip_message_keys(header.pn)?;
-            self.dh_ratchet_he(&header)?;
+            trial.skip_message_keys(header.pn)?;
+            trial.dh_ratchet_he(&header)?;
         }
-        self.skip_message_keys(header.n)?;
+        trial.skip_message_keys(header.n)?;
 
-        let ckr = self
+        let ckr = trial
             .ckr
             .as_ref()
             .ok_or_else(|| Error::Ratchet("no receiving chain".to_string()))?;
         let (ckr_next, mk) = kdf_ck(ckr);
-        self.ckr = Some(ckr_next);
-        self.nr += 1;
+        trial.ckr = Some(ckr_next);
+        trial.nr += 1;
 
         let padded = aead_open(&mk, &msg.ciphertext, &msg.enc_header)?;
-        crate::padding::unpad(&padded)
+        let pt = crate::padding::unpad(&padded)?;
+
+        // Commit only after AEAD + unpad both succeeded.
+        *self = trial;
+        Ok(pt)
     }
 
     // ── internals ─────────────────────────────────────────────────────────────
