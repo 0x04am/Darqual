@@ -65,8 +65,11 @@ pub async fn serve_block_listener(listener: TcpListener, block: Block) -> Result
                 continue;
             }
         };
-        match tokio::time::timeout(frame::CONN_TIMEOUT, frame::write_frame(&mut stream, &serialised))
-            .await
+        match tokio::time::timeout(
+            frame::CONN_TIMEOUT,
+            frame::write_frame(&mut stream, &serialised),
+        )
+        .await
         {
             Ok(Ok(())) => debug!(?peer, bytes = serialised.len(), "block frame sent"),
             Ok(Err(e)) => warn!(?peer, "frame write error: {}", e),

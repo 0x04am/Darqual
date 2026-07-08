@@ -65,9 +65,7 @@ impl Identity {
     /// Returns `Error::IdentityExists` if the file already exists.
     pub fn save(&self, path: &Path) -> Result<()> {
         if path.exists() {
-            return Err(Error::IdentityExists(
-                path.display().to_string(),
-            ));
+            return Err(Error::IdentityExists(path.display().to_string()));
         }
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;

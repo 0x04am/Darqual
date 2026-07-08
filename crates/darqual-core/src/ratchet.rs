@@ -20,7 +20,7 @@
 //!   `dh_pub` until we decrypt the header).
 //! - `HDEC` on a wrong key returns `Err`, never panics — trial-decryption depends on it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use chacha20poly1305::{
     aead::{Aead, KeyInit, Payload},
@@ -127,7 +127,7 @@ pub struct RatchetSession {
     /// Out-of-order message keys: (header_key, n) -> mk.
     skipped: BTreeMap<SkippedKey, [u8; 32]>,
     /// FIFO of skipped-key insertion order, for MAX_SKIP_STORE eviction.
-    skipped_order: Vec<SkippedKey>,
+    skipped_order: VecDeque<SkippedKey>,
 }
 
 type SkippedKey = ([u8; 32], u32);
@@ -307,7 +307,7 @@ impl RatchetSession {
             nhks,
             nhkr: shared_nhkb,
             skipped: BTreeMap::new(),
-            skipped_order: Vec::new(),
+            skipped_order: VecDeque::new(),
         }
     }
 
@@ -333,16 +333,15 @@ impl RatchetSession {
             nhks: shared_nhkb,
             nhkr: shared_hka,
             skipped: BTreeMap::new(),
-            skipped_order: Vec::new(),
+            skipped_order: VecDeque::new(),
         }
     }
 
     /// Encrypt the next message in the sending chain. Advances `ns`.
     pub fn encrypt(&mut self, plaintext: &[u8]) -> Result<RatchetMessage> {
-        let cks = self
-            .cks
-            .as_ref()
-            .ok_or_else(|| Error::Ratchet("no sending chain (responder must receive first)".to_string()))?;
+        let cks = self.cks.as_ref().ok_or_else(|| {
+            Error::Ratchet("no sending chain (responder must receive first)".to_string())
+        })?;
         let hks = self
             .hks
             .as_ref()
@@ -462,9 +461,9 @@ impl RatchetSession {
             let (ckr_next, mk) = kdf_ck(&ckr);
             let key: SkippedKey = (hkr, self.nr);
             self.skipped.insert(key, mk);
-            self.skipped_order.push(key);
+            self.skipped_order.push_back(key);
             while self.skipped_order.len() > MAX_SKIP_STORE {
-                let oldest = self.skipped_order.remove(0);
+                let oldest = self.skipped_order.pop_front().expect("non-empty");
                 self.skipped.remove(&oldest);
             }
             ckr = ckr_next;
@@ -717,7 +716,10 @@ mod tests {
         let r1 = b.encrypt(b"hi back").unwrap();
         {
             let (_h, do_ratchet) = a.decrypt_header(&r1.enc_header).unwrap();
-            assert!(do_ratchet, "Alice's first inbound must trigger ratchet via nhkr");
+            assert!(
+                do_ratchet,
+                "Alice's first inbound must trigger ratchet via nhkr"
+            );
         }
         assert_eq!(a.decrypt(&r1).unwrap(), b"hi back");
 
@@ -726,7 +728,10 @@ mod tests {
         let m2 = a.encrypt(b"third").unwrap();
         {
             let (_h, do_ratchet) = b.decrypt_header(&m2.enc_header).unwrap();
-            assert!(do_ratchet, "post-rotate inbound must trigger ratchet via nhkr");
+            assert!(
+                do_ratchet,
+                "post-rotate inbound must trigger ratchet via nhkr"
+            );
         }
         assert_eq!(b.decrypt(&m2).unwrap(), b"third");
 

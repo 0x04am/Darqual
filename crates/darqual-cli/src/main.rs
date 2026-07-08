@@ -54,14 +54,13 @@ fn main() -> Result<()> {
 fn cmd_keygen(force: bool) -> Result<()> {
     let path = Identity::default_path().context("could not determine identity path")?;
 
-    if path.exists() && !force {
-        anyhow::bail!(
-            "Identity already exists at {}\nUse --force to overwrite.",
-            path.display()
-        );
+    // If --force, remove the existing file so `save` can proceed.
+    if path.exists() && force {
+        std::fs::remove_file(&path).context("failed to remove existing identity")?;
     }
 
     let id = Identity::generate();
+    // `save` now returns `Error::IdentityExists` if the file already exists (no --force).
     id.save(&path).context("failed to save identity")?;
 
     println!("✓ Identity generated");

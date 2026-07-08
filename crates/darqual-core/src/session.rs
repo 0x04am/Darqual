@@ -219,9 +219,7 @@ mod tests {
         let mut a = sa.load_or_init_initiator(&alice, &bob_card).unwrap();
         let rm = a.encrypt(b"m1").unwrap();
         sa.save(&bob_card.x_pub, &a).unwrap();
-        let mut b = sb
-            .load_or_init_responder(&bob, &alice.x_pub())
-            .unwrap();
+        let mut b = sb.load_or_init_responder(&bob, &alice.x_pub()).unwrap();
         assert_eq!(b.decrypt(&rm).unwrap(), b"m1");
         sb.save(&alice.x_pub(), &b).unwrap();
 
@@ -250,7 +248,9 @@ mod tests {
             let dir_b = TempDir::new().unwrap();
             let sa = store(&dir_a);
             let sb = store(&dir_b);
-            let mut a = sa.load_or_init_initiator(&alice, &bob.contact_card()).unwrap();
+            let mut a = sa
+                .load_or_init_initiator(&alice, &bob.contact_card())
+                .unwrap();
             let rm = a.encrypt(b"a-first").unwrap();
             let mut b = sb.load_or_init_responder(&bob, &alice.x_pub()).unwrap();
             assert_eq!(b.decrypt(&rm).unwrap(), b"a-first");
@@ -261,7 +261,9 @@ mod tests {
             let dir_b = TempDir::new().unwrap();
             let sa = store(&dir_a);
             let sb = store(&dir_b);
-            let mut b = sb.load_or_init_initiator(&bob, &alice.contact_card()).unwrap();
+            let mut b = sb
+                .load_or_init_initiator(&bob, &alice.contact_card())
+                .unwrap();
             let rm = b.encrypt(b"b-first").unwrap();
             let mut a = sa.load_or_init_responder(&alice, &bob.x_pub()).unwrap();
             assert_eq!(a.decrypt(&rm).unwrap(), b"b-first");

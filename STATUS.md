@@ -82,7 +82,7 @@ as far as it verifiably holds together — truth over theater.
   phases; every phase verify.sh-green + independently re-verified. The IP-leak gap and the
   forward-secrecy gap are both CLOSED.
 - S218 overnight→day (2026-06-24): Stages 0–9 shipped + Stage 10 partial. 11 tags
-  (v0.0.1 → v0.10.0). **132 tests, all green.** verify.sh gate run before every commit;
+  (v0.0.1 → v0.10.0). **164 tests, all green.** verify.sh gate run before every commit;
   every subagent's work verified independently (caught a recursive-trait bug, clippy nits,
   flawed test assumptions). Whole pipeline demoed live end-to-end over the network.
   - v0.0.1 Foundation · v0.1.0 Transport(TCP) · v0.2.0 Ledger · v0.3.0 Dead-drop labels

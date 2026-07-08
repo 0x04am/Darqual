@@ -51,10 +51,16 @@ impl FromStr for DarqualAddress {
             )));
         }
         let body = &lower[PREFIX.len()..];
-        // validate: must be valid base32
-        BASE32_NOPAD
+        // validate: must be valid base32 decoding to exactly 20 bytes
+        let decoded = BASE32_NOPAD
             .decode(body.to_uppercase().as_bytes())
             .map_err(|e| Error::InvalidAddress(format!("invalid base32: {}", e)))?;
+        if decoded.len() != 20 {
+            return Err(Error::InvalidAddress(format!(
+                "decoded address must be 20 bytes, got {}",
+                decoded.len()
+            )));
+        }
         Ok(DarqualAddress(lower))
     }
 }

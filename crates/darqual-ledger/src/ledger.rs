@@ -18,10 +18,10 @@ pub enum LedgerError {
 pub struct Ledger {
     blocks: Vec<Block>,
     /// Maximum number of blocks to retain.
-    pub window: usize,
+    window: usize,
     /// Minimum PoW difficulty required for every entry appended to this ledger.
     /// `0` disables the check (back-compat / tests that don't care about PoW).
-    pub pow_difficulty: u32,
+    pow_difficulty: u32,
 }
 
 impl Ledger {
@@ -120,5 +120,15 @@ impl Ledger {
             prev = block.hash();
         }
         true
+    }
+
+    /// Hot-window size: maximum number of blocks retained.
+    pub fn window(&self) -> usize {
+        self.window
+    }
+
+    /// Minimum PoW difficulty enforced on every appended entry (`0` = disabled).
+    pub fn pow_difficulty(&self) -> u32 {
+        self.pow_difficulty
     }
 }

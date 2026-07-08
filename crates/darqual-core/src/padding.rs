@@ -152,8 +152,16 @@ mod tests {
     // 3. Boundary: 252 → 256; 253 → 1024.
     #[test]
     fn boundary_252_253() {
-        assert_eq!(pad(&vec![0u8; 252]).len(), 256, "252 + 4 = 256 fits exactly");
-        assert_eq!(pad(&vec![0u8; 253]).len(), 1024, "253 + 4 = 257 overflows 256");
+        assert_eq!(
+            pad(&vec![0u8; 252]).len(),
+            256,
+            "252 + 4 = 256 fits exactly"
+        );
+        assert_eq!(
+            pad(&vec![0u8; 253]).len(),
+            1024,
+            "253 + 4 = 257 overflows 256"
+        );
     }
 
     // 4. Oversize: 300_000 → next multiple of 262144 = 524288.

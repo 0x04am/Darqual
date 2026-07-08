@@ -346,8 +346,7 @@ mod tests {
         let bob = Identity::generate();
         let eve = Identity::generate();
 
-        let lb = Lockbox::seal_authenticated(&alice, &card(&bob), b"secret")
-            .expect("seal failed");
+        let lb = Lockbox::seal_authenticated(&alice, &card(&bob), b"secret").expect("seal failed");
 
         let result = Lockbox::open_authenticated(&eve, &lb.envelope);
         assert!(

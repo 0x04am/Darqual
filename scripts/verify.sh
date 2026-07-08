@@ -11,20 +11,24 @@ say() { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
 ok()  { printf '\033[1;32m  ✓ %s\033[0m\n' "$*"; }
 bad() { printf '\033[1;31m  ✗ %s\033[0m\n' "$*"; fail=1; }
 
-say "1/4  cargo build (workspace)"
+say "0/5  cargo fmt --check (workspace)"
+cargo fmt --check 2>&1
+[ "${PIPESTATUS[0]}" -eq 0 ] && ok "fmt clean" || bad "fmt check failed — run 'cargo fmt'"
+
+say "1/5  cargo build (workspace)"
 cargo build --workspace 2>&1 | tail -3
 [ "${PIPESTATUS[0]}" -eq 0 ] && ok "build" || bad "build failed"
 
-say "2/4  cargo test (workspace)"
+say "2/5  cargo test (workspace)"
 test_out=$(cargo test --workspace 2>&1); trc=$?
 echo "$test_out" | grep -E "test result:" || true
 if [ "$trc" -ne 0 ] || echo "$test_out" | grep -q "test result: FAILED"; then bad "tests failed"; else ok "all tests pass"; fi
 
-say "3/4  cargo clippy (-D warnings)"
+say "3/5  cargo clippy (-D warnings)"
 cargo clippy --workspace --all-targets -- -D warnings 2>&1 | tail -4
 [ "${PIPESTATUS[0]}" -eq 0 ] && ok "clippy clean" || bad "clippy warnings"
 
-say "4/4  live messaging demo (Alice -> Bob, Eve rejected)"
+say "4/5  live messaging demo (Alice -> Bob, Eve rejected)"
 if [ -x "$BIN" ]; then
   rm -rf /tmp/dq-v-alice /tmp/dq-v-bob /tmp/dq-v-eve
   HOME=/tmp/dq-v-alice "$BIN" keygen >/dev/null 2>&1
