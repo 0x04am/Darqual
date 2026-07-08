@@ -1,5 +1,6 @@
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
@@ -61,7 +62,13 @@ impl Identity {
     }
 
     /// Save the identity to a TOML file. Creates parent dirs. Sets 0600 perms.
+    /// Returns `Error::IdentityExists` if the file already exists.
     pub fn save(&self, path: &Path) -> Result<()> {
+        if path.exists() {
+            return Err(Error::IdentityExists(
+                path.display().to_string(),
+            ));
+        }
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
@@ -78,11 +85,20 @@ impl Identity {
         x_seed.zeroize();
 
         let toml_str = toml::to_string(&file)?;
-        fs::write(path, toml_str.as_bytes())?;
 
-        // 0600 perms
-        let perms = fs::Permissions::from_mode(0o600);
-        fs::set_permissions(path, perms)?;
+        // TOCTOU-safe write (F-19): create the file with 0600 atomically instead
+        // of fs::write + chmod (which leaves a window at the default umask).
+        // Remove any pre-existing file first so overwrite (e.g. keygen --force)
+        // still works and also gets fresh 0600 perms.
+        if path.exists() {
+            fs::remove_file(path)?;
+        }
+        let mut f = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(path)?;
+        f.write_all(toml_str.as_bytes())?;
 
         Ok(())
     }
