@@ -1,6 +1,7 @@
 use std::fmt;
 
 use x25519_dalek::PublicKey as X25519PublicKey;
+use zeroize::Zeroize;
 
 use crate::contact::ContactCard;
 use crate::error::Result;
@@ -24,9 +25,16 @@ pub fn shared_secret_with(me: &Identity, peer_x_pub: &[u8; 32]) -> [u8; 32] {
 }
 
 /// A shared conversation context between two parties.
-/// Holds the ECDH shared secret; never prints it.
+/// Holds the ECDH shared secret; never prints it. Zeroized on drop.
 pub struct Conversation {
     shared: [u8; 32],
+}
+
+/// Zeroize the shared secret on drop (F-7).
+impl Drop for Conversation {
+    fn drop(&mut self) {
+        self.shared.zeroize();
+    }
 }
 
 impl fmt::Debug for Conversation {

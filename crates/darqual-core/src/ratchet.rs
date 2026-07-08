@@ -132,6 +132,33 @@ pub struct RatchetSession {
 
 type SkippedKey = ([u8; 32], u32);
 
+/// Best-effort zeroization of ratchet secrets on drop (F-7). The `skipped`
+/// map's values are wiped in place before clearing; its keys (header keys)
+/// cannot be mutated through the map API and are simply dropped.
+impl Drop for RatchetSession {
+    fn drop(&mut self) {
+        use zeroize::Zeroize;
+        self.rk.zeroize();
+        self.dhs_secret.zeroize();
+        self.dhs_pub.zeroize();
+        self.dhr.zeroize();
+        self.cks.zeroize();
+        self.ckr.zeroize();
+        self.ns.zeroize();
+        self.nr.zeroize();
+        self.pn.zeroize();
+        self.hks.zeroize();
+        self.hkr.zeroize();
+        self.nhks.zeroize();
+        self.nhkr.zeroize();
+        for mk in self.skipped.values_mut() {
+            mk.zeroize();
+        }
+        self.skipped.clear();
+        self.skipped_order.clear();
+    }
+}
+
 impl std::fmt::Debug for RatchetSession {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RatchetSession")

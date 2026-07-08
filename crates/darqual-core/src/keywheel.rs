@@ -26,6 +26,8 @@
 
 use std::fmt;
 
+use zeroize::Zeroize;
+
 use crate::label::Label;
 
 // ── Domain separators ────────────────────────────────────────────────────────
@@ -44,12 +46,19 @@ pub(crate) const SEED_CONTEXT: &str = "keywheel-seed";
 /// A forward-secret label ratchet for a single conversation.
 ///
 /// State is advanced one-way each epoch; the `Debug` impl redacts the secret
-/// to prevent accidental exposure in logs.
+/// to prevent accidental exposure in logs. State is zeroized on drop.
 pub struct Keywheel {
     /// Current epoch counter.
     pub epoch: u64,
     /// Current ratchet state — secret, never printed.
     state: [u8; 32],
+}
+
+/// Zeroize the ratchet state on drop (F-7).
+impl Drop for Keywheel {
+    fn drop(&mut self) {
+        self.state.zeroize();
+    }
 }
 
 impl fmt::Debug for Keywheel {
