@@ -75,6 +75,16 @@ fn kdf_ess(es: &[u8; 32], ss: &[u8; 32]) -> [u8; 32] {
     blake3::derive_key(KDF_CTX_ESS, &input)
 }
 
+/// Reject degenerate (all-zero) DH outputs produced by low-order or identity
+/// public keys (F-14). x25519 with such points yields a shared secret known to
+/// an attacker; every `diffie_hellman()` result must pass this check.
+fn check_dh(shared: &x25519_dalek::SharedSecret) -> Result<()> {
+    if shared.as_bytes() == &[0u8; 32] {
+        return Err(Error::Key("degenerate DH output".into()));
+    }
+    Ok(())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Public API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,6 +98,7 @@ impl Lockbox {
         let eph_pub = X25519PublicKey::from(&eph_secret);
 
         let shared = eph_secret.diffie_hellman(recipient_x_pub);
+        check_dh(&shared)?;
         let key_bytes = blake3::derive_key(KDF_CONTEXT_V1, shared.as_bytes());
         let nonce_bytes = random_nonce();
         let padded = crate::padding::pad(msg);
@@ -134,6 +145,7 @@ impl Lockbox {
 
         // es: DH(eph, bob_x_pub)  →  k0
         let es = eph_secret.diffie_hellman(&bob_x_pub);
+        check_dh(&es)?;
         let k0 = blake3::derive_key(KDF_CTX_ES, es.as_bytes());
 
         // s: encrypt Alice's static x_pub under k0
@@ -145,6 +157,7 @@ impl Lockbox {
 
         // ss: DH(alice_x_secret, bob_x_pub)  →  k1 = KDF(es || ss)
         let ss = sender.x_secret.diffie_hellman(&bob_x_pub);
+        check_dh(&ss)?;
         let k1 = kdf_ess(es.as_bytes(), ss.as_bytes());
 
         // msg: encrypt under k1 (padded to fixed bucket → no length leak).
@@ -234,6 +247,7 @@ fn open_v1(identity: &Identity, wire: &[u8]) -> Result<(Vec<u8>, Option<[u8; 32]
 
     let eph_pub = X25519PublicKey::from(eph_pub_bytes);
     let shared = identity.x_secret.diffie_hellman(&eph_pub);
+    check_dh(&shared)?;
     let key_bytes = blake3::derive_key(KDF_CONTEXT_V1, shared.as_bytes());
 
     let plaintext = aead_decrypt(key_bytes, nonce_bytes, ct)?;
@@ -264,6 +278,7 @@ fn open_v2(identity: &Identity, wire: &[u8]) -> Result<(Vec<u8>, Option<[u8; 32]
 
     // es: DH(bob_x_secret, eph_pub)  →  k0
     let es = identity.x_secret.diffie_hellman(&eph_pub);
+    check_dh(&es)?;
     let k0 = blake3::derive_key(KDF_CTX_ES, es.as_bytes());
 
     // Decrypt enc_s → recover alice_x_pub
@@ -275,6 +290,7 @@ fn open_v2(identity: &Identity, wire: &[u8]) -> Result<(Vec<u8>, Option<[u8; 32]
 
     // ss: DH(bob_x_secret, alice_x_pub)  →  k1
     let ss = identity.x_secret.diffie_hellman(&alice_x_pub);
+    check_dh(&ss)?;
     let k1 = kdf_ess(es.as_bytes(), ss.as_bytes());
 
     // Decrypt enc_msg — AEAD success IS the authentication
