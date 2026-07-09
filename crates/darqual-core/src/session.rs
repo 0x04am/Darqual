@@ -113,6 +113,30 @@ impl SessionStore {
     pub fn dir(&self) -> &Path {
         &self.dir
     }
+
+    /// Iterate all persisted sessions as (peer_x_pub, session) pairs.
+    /// peer_x_pub is recovered from the hex filename (`path_for`, session.rs:51-53).
+    /// Files whose stem is not a valid 64-hex string (e.g. `.bin.tmp` atomic-save
+    /// temporaries) are silently skipped.
+    pub fn list(&self) -> Result<Vec<([u8; 32], RatchetSession)>> {
+        let mut out = Vec::new();
+        for entry in fs::read_dir(&self.dir)? {
+            let path = entry?.path();
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Ok(bytes) = hex::decode(stem) else {
+                continue; // skip .tmp / junk
+            };
+            let Ok(peer): std::result::Result<[u8; 32], _> = bytes.try_into() else {
+                continue;
+            };
+            if let Some(sess) = self.load(&peer)? {
+                out.push((peer, sess));
+            }
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]

@@ -501,6 +501,12 @@ impl RatchetSession {
         Ok(())
     }
 
+    /// True once we have successfully received at least one message from the peer
+    /// (receiving chain established). Used for first-contact vs established routing.
+    pub fn received_from_peer(&self) -> bool {
+        self.ckr.is_some()
+    }
+
     /// My current ratchet public — exposed for test/inspection only.
     #[doc(hidden)]
     pub fn dhs_pub(&self) -> [u8; 32] {
