@@ -479,4 +479,75 @@ mod tests {
         let plain = Lockbox::open(&bob, &lb.envelope).expect("open() on v2 box failed");
         assert_eq!(plain, b"plaintext-only path");
     }
+
+    // ── 7. F-2 bootstrap round-trip: sender identity recovered; v1 yields None ─
+    //
+    // This is the core of handle_bootstrap (f2-scope.md §3.1).
+    //
+    // a) seal_authenticated(alice, bob_card, payload) → open_authenticated(bob, env)
+    //    must recover (payload, Some(alice_x_pub)).  The sender's static key is
+    //    encrypted inside the AEAD (lockbox.rs:152-154) — invisible on the wire —
+    //    but recovered by the recipient after two DH operations and two AEAD opens.
+    //
+    // b) seal(bob_x_pub, payload) (anonymous v1) → open_authenticated(bob, env)
+    //    must recover (payload, None) — proves the None arm that handle_bootstrap
+    //    rejects (f2-scope.md §3.1: "Ok((_, None)) → rejected as bootstrap").
+    #[test]
+    fn f2_bootstrap_round_trip_authenticated_and_anonymous() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let bob_card = bob.contact_card();
+
+        let payload = b"ratchet-message-bytes";
+
+        // ── (a) Authenticated v2 box ──────────────────────────────────────────
+        let lb_v2 = Lockbox::seal_authenticated(&alice, &bob_card, payload)
+            .expect("seal_authenticated must succeed");
+
+        let (recovered_payload, sender_opt) =
+            Lockbox::open_authenticated(&bob, &lb_v2.envelope)
+                .expect("open_authenticated on v2 box must succeed");
+
+        assert_eq!(
+            recovered_payload, payload,
+            "plaintext must survive the v2 round-trip"
+        );
+
+        let sender_x_pub = sender_opt
+            .expect("v2 box must return Some(sender_x_pub) — sender identity is in the AEAD");
+
+        let alice_x_pub: [u8; 32] =
+            x25519_dalek::PublicKey::from(&alice.x_secret).to_bytes();
+        assert_eq!(
+            sender_x_pub, alice_x_pub,
+            "recovered sender_x_pub must be Alice's static x25519 public key"
+        );
+
+        // Sanity: the recovered key is NOT Bob's key (rules out trivial pass).
+        let bob_x_pub: [u8; 32] =
+            x25519_dalek::PublicKey::from(&bob.x_secret).to_bytes();
+        assert_ne!(
+            sender_x_pub, bob_x_pub,
+            "recovered sender must differ from recipient"
+        );
+
+        // ── (b) Anonymous v1 box → sender == None ────────────────────────────
+        let bob_x_pub_key = x25519_dalek::PublicKey::from(&bob.x_secret);
+        let lb_v1 = Lockbox::seal(&bob_x_pub_key, payload)
+            .expect("anonymous seal must succeed");
+
+        let (recovered_v1, sender_v1) =
+            Lockbox::open_authenticated(&bob, &lb_v1.envelope)
+                .expect("open_authenticated on v1 box must succeed");
+
+        assert_eq!(
+            recovered_v1, payload,
+            "plaintext must survive the v1 round-trip"
+        );
+        assert!(
+            sender_v1.is_none(),
+            "anonymous v1 box must yield None sender — \
+             handle_bootstrap must reject this arm (f2-scope.md §3.1)"
+        );
+    }
 }

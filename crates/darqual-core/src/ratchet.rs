@@ -749,4 +749,60 @@ mod tests {
         }
         assert_eq!(b.decrypt(&m3).unwrap(), b"same chain");
     }
+
+    // 10. received_from_peer() — initiator starts false, becomes true after first inbound.
+    //
+    // ckr is None until dh_ratchet_he() fires on the first inbound message
+    // (ratchet.rs:477-489).  received_from_peer() is the public test of that flag.
+    #[test]
+    fn received_from_peer_initiator_false_then_true() {
+        let (_alice, _bob, mut a, mut b) = pair();
+
+        // Immediately after init: initiator has no ckr (no inbound yet).
+        assert!(
+            !a.received_from_peer(),
+            "initiator must return false before receiving any message"
+        );
+
+        // Send A→B; B can decrypt (Bob now has a receiving chain established via dh_ratchet_he).
+        let m1 = a.encrypt(b"hi").unwrap();
+        assert_eq!(b.decrypt(&m1).unwrap(), b"hi");
+
+        // Bob has received from Alice — ckr is now Some after dh_ratchet_he.
+        assert!(
+            b.received_from_peer(),
+            "responder must return true after decrypting the first message from initiator"
+        );
+
+        // Alice still hasn't received anything back.
+        assert!(
+            !a.received_from_peer(),
+            "initiator must still be false until it receives a reply"
+        );
+
+        // Now B→A; Alice receives her first inbound.
+        let reply = b.encrypt(b"pong").unwrap();
+        assert_eq!(a.decrypt(&reply).unwrap(), b"pong");
+
+        assert!(
+            a.received_from_peer(),
+            "initiator must return true after decrypting the first reply from responder"
+        );
+    }
+
+    // 11. received_from_peer() — responder starts false before the first decrypt.
+    //
+    // init_responder() sets ckr: None (ratchet.rs:327) — the responder cannot
+    // send before receiving anyway (encrypt errors on cks: None, ratchet.rs:342).
+    // This test pins the semantics: a freshly-init'd responder also returns false.
+    #[test]
+    fn received_from_peer_responder_false_before_first_message() {
+        let (_alice, _bob, _a, b) = pair();
+
+        // Bob is the responder; no message has been decrypted yet.
+        assert!(
+            !b.received_from_peer(),
+            "freshly-init'd responder must return false (ckr=None until first decrypt)"
+        );
+    }
 }
