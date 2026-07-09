@@ -9,15 +9,32 @@
 //! post-compromise security, and encrypted headers per session. Spec:
 //! `notes/projects/anon-messenger-research/17-session-wiring.md`.
 //!
-//! Wire frame:  `[sender_x_pub : 32B][ bincode(RatchetMessage) ]`
+//! Wire frame (versioned envelope — F-2):
 //!
-//! Lockbox v2 remains the CLI primitive / sessionless bootstrap — it is just
-//! no longer the node's transport unit.
+//!   Frame v1 (first-contact bootstrap):
+//!     `[0x01][lockbox-v2 envelope bytes]`
+//!     Lockbox v2 (Noise IK) hides the sender's static x25519 pubkey inside
+//!     its first AEAD layer; only a fresh ephemeral is visible on the wire.
+//!     The RatchetMessage is the lockbox plaintext (inside the AEAD).
+//!
+//!   Frame v2 (established session):
+//!     `[0x02][bincode(RatchetMessage)]`
+//!     Fully opaque; receiver trial-decrypts against all known sessions.
+//!
+//! NOTE: the version byte itself tells an observer "first contact" vs
+//! "established", but reveals no identity — lockbox v2 frames are pairwise
+//! unlinkable (fresh ephemeral each time). No back-compat with pre-F-2 nodes
+//! (flag-day acceptable; pre-release software).
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use darqual_core::{ContactCard, Identity, RatchetMessage, SessionStore};
+use darqual_core::{ContactCard, Identity, Lockbox, RatchetMessage, SessionStore};
 use darqual_tor::{accept_one, bootstrap, dial_send, host};
+
+/// Frame version byte: lockbox-v2-wrapped RatchetMessage (first-contact bootstrap).
+const FRAME_BOOTSTRAP: u8 = 0x01;
+/// Frame version byte: bare RatchetMessage, trial-decrypted against known sessions.
+const FRAME_SESSION: u8 = 0x02;
 
 #[derive(Parser)]
 #[command(name = "darqual-tor-node", about = "Darqual node over Tor onion services")]
@@ -92,44 +109,108 @@ async fn host_cmd(nickname: &str, port: u16) -> Result<()> {
 }
 
 fn handle_frame(identity: &Identity, store: &SessionStore, frame: &[u8]) {
-    if frame.len() < 32 {
-        eprintln!("[recv] short frame ({} bytes)", frame.len());
+    let Some((&ver, body)) = frame.split_first() else {
+        eprintln!("[recv] empty frame");
         return;
+    };
+    match ver {
+        FRAME_BOOTSTRAP => handle_bootstrap(identity, store, body),
+        FRAME_SESSION => handle_session(store, body),
+        v => eprintln!("[recv] unknown frame version 0x{v:02x}"),
     }
-    let (sender_x_pub_slice, rm_bytes) = frame.split_at(32);
-    let mut sender_x_pub = [0u8; 32];
-    sender_x_pub.copy_from_slice(sender_x_pub_slice);
+}
 
-    let rm: RatchetMessage = match bincode::deserialize(rm_bytes) {
-        Ok(rm) => rm,
-        Err(e) => {
-            eprintln!("[recv] malformed ratchet message: {e}");
+/// v1 branch: lockbox-v2 decrypt → recover sender → responder bootstrap → ratchet decrypt.
+fn handle_bootstrap(identity: &Identity, store: &SessionStore, body: &[u8]) {
+    let envelope = match std::str::from_utf8(body) {
+        Ok(s) => s,
+        Err(_) => {
+            eprintln!("[recv] bootstrap body is not valid UTF-8");
             return;
         }
     };
 
-    let mut sess = match store.load_or_init_responder(identity, &sender_x_pub) {
+    // Sender identity is recovered from INSIDE the AEAD (lockbox.rs:284-289).
+    let (rm_bytes, sender) = match Lockbox::open_authenticated(identity, envelope) {
+        Ok((pt, Some(sender))) => (pt, sender),
+        Ok((_, None)) => {
+            // A lockbox-v1 (anonymous) cannot bootstrap a session — reject.
+            eprintln!("[recv] anonymous v1 lockbox rejected as bootstrap");
+            return;
+        }
+        Err(e) => {
+            eprintln!("[recv] bootstrap open failed: {e}");
+            return;
+        }
+    };
+
+    let rm: RatchetMessage = match bincode::deserialize(&rm_bytes) {
+        Ok(rm) => rm,
+        Err(e) => {
+            eprintln!("[recv] bootstrap ratchet message deserialize failed: {e}");
+            return;
+        }
+    };
+
+    // Idempotent: loads existing session if one exists, else init_responder.
+    let mut sess = match store.load_or_init_responder(identity, &sender) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("[recv] session load failed: {e}");
+            eprintln!("[recv] bootstrap session load failed: {e}");
             return;
         }
     };
 
     match sess.decrypt(&rm) {
         Ok(pt) => {
-            // Persist advanced state IMMEDIATELY after a successful decrypt.
-            if let Err(e) = store.save(&sender_x_pub, &sess) {
-                eprintln!("[recv] session save failed: {e}");
-                // Still print the plaintext — decrypt succeeded.
+            // Persist advanced state IMMEDIATELY after successful decrypt.
+            if let Err(e) = store.save(&sender, &sess) {
+                eprintln!("[recv] bootstrap session save failed: {e}");
+                // Still print — decrypt succeeded.
             }
             println!("[recv] {}", String::from_utf8_lossy(&pt));
         }
         Err(e) => {
-            // Failed decrypt: DO NOT save — state must not advance on failure.
-            eprintln!("[recv] decrypt failed: {e}");
+            // DO NOT save — state must not advance on failure.
+            eprintln!("[recv] bootstrap ratchet decrypt failed: {e}");
         }
     }
+}
+
+/// v2 branch: trial-decrypt the RatchetMessage against every known session.
+fn handle_session(store: &SessionStore, body: &[u8]) {
+    let rm: RatchetMessage = match bincode::deserialize(body) {
+        Ok(rm) => rm,
+        Err(e) => {
+            eprintln!("[recv] v2 frame ratchet message deserialize failed: {e}");
+            return;
+        }
+    };
+
+    let sessions = match store.list() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[recv] session list failed: {e}");
+            return;
+        }
+    };
+
+    let n = sessions.len();
+    for (peer, mut sess) in sessions {
+        match sess.decrypt(&rm) {
+            Ok(pt) => {
+                // Persist advanced state IMMEDIATELY after successful decrypt.
+                if let Err(e) = store.save(&peer, &sess) {
+                    eprintln!("[recv] session save failed: {e}");
+                }
+                println!("[recv] {}", String::from_utf8_lossy(&pt));
+                return;
+            }
+            Err(_) => continue, // wrong session — safe (clone-and-commit in decrypt)
+        }
+    }
+
+    eprintln!("[recv] v2 frame matched no session ({n} tried) — dropped");
 }
 
 async fn send_cmd(onion: &str, to: &str, message: &str, port: u16) -> Result<()> {
@@ -139,10 +220,21 @@ async fn send_cmd(onion: &str, to: &str, message: &str, port: u16) -> Result<()>
         Identity::load(&id_path).context("failed to load identity — run `darqual keygen` first")?;
     let store = SessionStore::open_default().context("open session store")?;
 
+    // Decide bootstrap vs session BEFORE load_or_init_initiator may create new state.
+    let had_session = store
+        .load(&card.x_pub)
+        .context("check existing session")?
+        .is_some();
+
     // Outbound: existing session, else bootstrap as initiator.
     let mut sess = store
         .load_or_init_initiator(&identity, &card)
         .context("load/init initiator session")?;
+
+    // Send v1 (bootstrap) until we have evidence the peer has our session:
+    // i.e. until we have received at least one message from them (ckr is Some).
+    let use_bootstrap_frame = !had_session || !sess.received_from_peer();
+
     let rm = sess.encrypt(message.as_bytes()).context("ratchet encrypt")?;
     // Persist advanced state IMMEDIATELY after encrypt.
     store
@@ -150,9 +242,21 @@ async fn send_cmd(onion: &str, to: &str, message: &str, port: u16) -> Result<()>
         .context("persist session after encrypt")?;
 
     let rm_bytes = bincode::serialize(&rm).context("bincode serialize ratchet message")?;
-    let mut frame = Vec::with_capacity(32 + rm_bytes.len());
-    frame.extend_from_slice(&identity.x_pub());
-    frame.extend_from_slice(&rm_bytes);
+
+    let frame = if use_bootstrap_frame {
+        // Recipient may not know who we are yet → wrap in lockbox v2 (Noise IK).
+        // Sender's static x_pub is AEAD-encrypted inside the lockbox; only a fresh
+        // ephemeral is visible on the wire.
+        let lb = Lockbox::seal_authenticated(&identity, &card, &rm_bytes)
+            .context("lockbox seal_authenticated")?;
+        let mut f = vec![FRAME_BOOTSTRAP];
+        f.extend_from_slice(lb.envelope.as_bytes());
+        f
+    } else {
+        let mut f = vec![FRAME_SESSION];
+        f.extend_from_slice(&rm_bytes);
+        f
+    };
 
     println!("[tor] bootstrapping onto the Tor network…");
     let client = bootstrap().await.context("bootstrap")?;
