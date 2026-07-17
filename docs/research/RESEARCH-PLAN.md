@@ -16,25 +16,25 @@
 - [x] Draft security definitions.
 - [x] Draft protocol sketch.
 - [x] Draft novelty matrix.
-- [ ] Convert informal security properties into game-based definitions.
-- [ ] Review the constitution against the SoK taxonomy.
+- [x] Convert informal security properties into draft game-based definitions.
+- [x] Review the constitution against the SoK taxonomy and citation-closure systems.
 
 ## Phase 2: Literature closure
 
-- [ ] Fully annotate PingPong, Stadium, Karaoke, Express, Talek, Trellis, RPM, YOSO threshold service, FrodoPIR, and Pudding.
-- [ ] Add Groove, Pung, Vuvuzela, Loopix, XRD, Blinder, Atom, Clarion, and recent 2025–2026 work.
-- [ ] Produce a primitive-by-primitive trust and leakage comparison.
-- [ ] Search citations and citing works for equivalent rotating-service constructions.
+- [x] Fully annotate PingPong, Stadium, Karaoke, Express, Groove, XRD, RPM, and available modern sources; Talek/Trellis/YOSO require final verified full-text annotation.
+- [x] Add Groove, XRD, Clarion, Trellis, Echomix, and recent 2025–2026 work to the comparison map.
+- [x] Produce an initial primitive-by-primitive trust and leakage comparison.
+- [ ] Complete formal citation-graph closure and search citing works for equivalent rotating-service constructions.
 - [ ] Seek an external academic novelty check before implementation expansion.
 
 ## Phase 3: Protocol analysis
 
-- [ ] Choose the fixed-committee threshold model.
-- [ ] Specify private write, notification, and retrieval primitives.
-- [ ] Specify participant-set commitment and exclusion behavior.
-- [ ] Specify handoff state and erasure requirements.
-- [ ] Prove or disprove cross-epoch privacy under mobile corruption.
-- [ ] Decide whether the commitment log needs consensus or only threshold certification.
+- [x] Choose the fixed-committee threshold model (`n=4`, `f=1`, quorum 3).
+- [x] Specify baseline and candidate private write, notification, and retrieval primitives.
+- [x] Specify participant-set commitment and privacy-safe exclusion behavior.
+- [x] Specify handoff state, overlap assumptions, and erasure requirements.
+- [x] Produce an initial mobile-corruption attack analysis; formal proof or impossibility result remains open.
+- [x] Decide provisionally that the public log uses threshold-certified commitments; generic consensus is not required for the first artifact.
 
 ## Phase 4: Deterministic simulator
 

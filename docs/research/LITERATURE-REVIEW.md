@@ -180,3 +180,61 @@ Compare strict constant-rate schedules against optimistic indistinguishability. 
 - S. Langowski, S. Servan-Schreiber, and S. Devadas, “Trellis,” NDSS 2023. https://doi.org/10.14722/ndss.2023.23088
 - C. Kocaoğullar et al., “Pudding: Private User Discovery in Anonymity Networks,” IEEE S&P 2024. https://doi.org/10.1109/sp54263.2024.00167
 - F. Benhamouda et al., “Threshold Cryptography as a Service (in the Multiserver and YOSO Models),” CCS 2022. https://doi.org/10.1145/3548606.3559397
+
+## Citation-closure pass: systems added after the initial map
+
+### Groove: Flexible Metadata-Private Messaging (OSDI 2022)
+
+Groove is the strongest correction to the claim that asynchronous flexible metadata-private messaging was missing before PingPong. It supports multiple devices, offline recipients, persistent channels, and mobile clients through **oblivious delegation** to an untrusted service provider. The provider participates continuously in the rigid mixnet on a user's behalf, buffers setup traffic, replaces stale messages safely, and supports oblivious fetch without learning which channels are active.
+
+Groove provides differential privacy against a global active adversary that may compromise all service providers and probabilistically compromise mix servers. Its prototype used 100 servers in four data centers, reported roughly 32 seconds for one million users with 50 buddies, and measured about 100 MB/month plus 16% additional battery use on a Pixel 4.
+
+**Effect on Darqual:** Offline recipients, multiple devices, untrusted delegation, and persistent channels are not novel. Darqual must compare committee continuity against Groove's simpler untrusted-provider continuity. A rotating committee is only useful if it improves the trust or leakage model enough to justify much greater complexity.
+
+### XRD: Scalable Messaging with Cryptographic Privacy (2019)
+
+XRD uses multiple parallel mix chains and aggregate hybrid shuffles. Every user sends to several chains so every pair intersects in at least one chain. It offers cryptographic metadata privacy against a global observer controlling a fraction of servers and all but two users, with no privacy budget. It reported 251 seconds for two million users on 100 servers.
+
+XRD explicitly does not hide participation, does not provide strong availability, assumes users coordinate conversation start, and recommends staying online to resist intersection attacks. It preserves privacy during churn and DoS but may lose liveness.
+
+**Effect on Darqual:** Cryptographic privacy plus horizontal scaling already exists, but not low-latency flexible asynchrony. Darqual must separate privacy-safe abort from availability and must not treat server churn alone as the novel axis.
+
+### Clarion: Anonymous Communication from Multiparty Shuffling (NDSS 2022)
+
+Clarion accelerates multiparty shuffling by moving expensive work into an offline phase and reducing online communication. It provides an efficient anonymous-broadcast substrate under a small-server MPC model.
+
+**Effect on Darqual:** A committee's online epoch path should reuse modern shuffle/MPC techniques. A bespoke blockchain orderer is not justified unless it beats or complements this substrate.
+
+### Trellis: Robust and Scalable Metadata-private Anonymous Broadcast (NDSS 2023)
+
+Trellis routes messages through successive server groups, posts results to a public bulletin board, and adds anonymous routing tokens, proof of delivery, blame, adversary removal, and recovery. It is designed to preserve delivery despite malicious parties and server churn, including dishonest-majority settings with degraded performance.
+
+**Effect on Darqual:** Robustness, blame, route reconfiguration, and bulletin-board commitments are prior art. Darqual's contribution must be messaging-specific asynchronous state and private committee handoff, not generic robust anonymous broadcast.
+
+### Echomix: A Strong Anonymity System with Messaging (2025)
+
+Echomix is a modern mix-network framework with messaging protocols, post-quantum-oriented components, decoy traffic, and practical deployment concerns. It reinforces that transport-layer strong anonymity and mailbox semantics are active modern work, not a solved 2017 snapshot.
+
+**Effect on Darqual:** Echomix becomes a deployment and mix-underlay baseline. Darqual should avoid implementing a new mix packet format unless committee experiments expose a requirement existing systems cannot satisfy.
+
+### Talek: Private Group Messaging with Hidden Access Patterns (2020)
+
+Talek combines private writes, private reads, access-sequence indistinguishability, and a notification mechanism over untrusted servers. It uses message TTL and a compact notification structure to balance retention and cost.
+
+**Effect on Darqual:** Private notification plus hidden reads is established. The new question is how such state survives committee rotation and mobile corruption without a fixed non-colluding server set.
+
+## Closure result
+
+The expanded comparison eliminates the following candidate novelty claims:
+
+- flexible offline metadata-private messaging, because Groove already provides it;
+- scalable cryptographic metadata privacy, because XRD provides it;
+- robust scalable anonymous broadcast, because Trellis, Clarion, and RPM cover this space;
+- hidden access-pattern group messaging, because Talek provides it;
+- modern strong-anonymity messaging transport, because Echomix occupies that layer.
+
+The surviving candidate contribution is narrower:
+
+> privacy-preserving migration of a cryptographic notify-before-retrieval service across ephemeral committees, with explicit anonymity-set integrity and mobile-corruption analysis.
+
+This remains a hypothesis. A formal citation graph and external expert review are still required before claiming novelty.
