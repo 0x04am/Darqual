@@ -353,7 +353,9 @@ mod tests {
         // RatchetMessage so we can verify the loaded session can decrypt it.
         let mut saved_msgs: Vec<([u8; 32], RatchetMessage)> = Vec::new();
         for peer in &peers {
-            let mut sess = store.load_or_init_initiator(&alice, &peer.contact_card()).unwrap();
+            let mut sess = store
+                .load_or_init_initiator(&alice, &peer.contact_card())
+                .unwrap();
             let rm = sess.encrypt(b"list test").unwrap();
             store.save(&peer.x_pub(), &sess).unwrap();
             saved_msgs.push((peer.x_pub(), rm));
@@ -367,26 +369,34 @@ mod tests {
         let mut expected_keys: Vec<[u8; 32]> = peers.iter().map(|p| p.x_pub()).collect();
         expected_keys.sort();
         let listed_keys: Vec<[u8; 32]> = listed.iter().map(|(k, _)| *k).collect();
-        assert_eq!(listed_keys, expected_keys, "listed peer keys must match saved peer keys");
+        assert_eq!(
+            listed_keys, expected_keys,
+            "listed peer keys must match saved peer keys"
+        );
 
         // Build a lookup table: peer_key → (session from list, RatchetMessage).
         // The initiator session was saved *after* encrypt, so the stored ns = 1.
         // Re-init the responder side and verify it can decrypt each message.
         for (peer_key, rm) in saved_msgs {
             let peer_id = peers.iter().find(|p| p.x_pub() == peer_key).unwrap();
-            let mut resp = store.load_or_init_responder(
-                // Use peer as "bob" to get the same shared secret from the other side.
-                peer_id,
-                &alice.x_pub(),
-            ).unwrap();
+            let mut resp = store
+                .load_or_init_responder(
+                    // Use peer as "bob" to get the same shared secret from the other side.
+                    peer_id,
+                    &alice.x_pub(),
+                )
+                .unwrap();
             // We need alice's initiator state from the store to verify decrypt from responder
             // perspective is consistent. Here we directly confirm the session returned by
             // list() is the same as what was saved: load it ourselves and compare ns.
             let loaded = store.load(&peer_key).unwrap().expect("session must exist");
             let (_, list_sess) = listed.iter().find(|(k, _)| k == &peer_key).unwrap();
             // Both must have advanced ns to 1 (one encrypt call).
-            assert_eq!(loaded.dhs_pub(), list_sess.dhs_pub(),
-                "list() session dhs_pub must match directly-loaded session");
+            assert_eq!(
+                loaded.dhs_pub(),
+                list_sess.dhs_pub(),
+                "list() session dhs_pub must match directly-loaded session"
+            );
             // The responder can decrypt the message — proves session state is correct.
             assert_eq!(resp.decrypt(&rm).unwrap(), b"list test");
         }
@@ -406,14 +416,16 @@ mod tests {
         let peer = Identity::generate();
 
         // Save one real session.
-        let mut sess = store.load_or_init_initiator(&alice, &peer.contact_card()).unwrap();
+        let mut sess = store
+            .load_or_init_initiator(&alice, &peer.contact_card())
+            .unwrap();
         let _ = sess.encrypt(b"real").unwrap();
         store.save(&peer.x_pub(), &sess).unwrap();
 
         // Plant a stale .bin.tmp file (mirrors what atomic-save leaves on crash).
-        let tmp_path = dir.path().join(
-            format!("{}.bin.tmp", hex::encode(peer.x_pub()))
-        );
+        let tmp_path = dir
+            .path()
+            .join(format!("{}.bin.tmp", hex::encode(peer.x_pub())));
         std::fs::write(&tmp_path, b"garbage tmp content").unwrap();
 
         // Plant a totally random non-hex filename that would trip hex::decode.
@@ -426,8 +438,16 @@ mod tests {
         std::fs::write(&short_path, b"short hex").unwrap();
 
         let listed = store.list().unwrap();
-        assert_eq!(listed.len(), 1, "list() must skip junk files and return only the real session");
-        assert_eq!(listed[0].0, peer.x_pub(), "the returned peer key must be the real one");
+        assert_eq!(
+            listed.len(),
+            1,
+            "list() must skip junk files and return only the real session"
+        );
+        assert_eq!(
+            listed[0].0,
+            peer.x_pub(),
+            "the returned peer key must be the real one"
+        );
     }
 
     // (7) Parity: shared_secret_with(me, peer.x_pub) == Conversation::new(...).shared_secret()
@@ -479,7 +499,7 @@ mod tests {
         // Three independent senders.  Alice (middle) will send the target second message.
         let carol = Identity::generate();
         let alice = Identity::generate();
-        let dave  = Identity::generate();
+        let dave = Identity::generate();
         let senders: [&Identity; 3] = [&carol, &alice, &dave];
 
         // Bootstrap: each sender inits their session, encrypts msg #1, Bob decrypts+saves.
@@ -506,7 +526,11 @@ mod tests {
             }
         }
 
-        assert_eq!(store_bob.list().unwrap().len(), 3, "Bob must have 3 sessions");
+        assert_eq!(
+            store_bob.list().unwrap().len(),
+            3,
+            "Bob must have 3 sessions"
+        );
 
         // Alice sends her SECOND message using the captured session (ns=1, same dhs_pub).
         let alice_msg = b"secret for bob from alice only";
@@ -520,21 +544,24 @@ mod tests {
         let sessions = store_bob.list().unwrap();
         assert_eq!(sessions.len(), 3, "loop must iterate all 3 sessions");
 
-        let mut match_count  = 0usize;
+        let mut match_count = 0usize;
         let mut matched_key: Option<[u8; 32]> = None;
-        let mut recovered:   Option<Vec<u8>>  = None;
+        let mut recovered: Option<Vec<u8>> = None;
 
         for (peer_key, mut sess) in sessions {
             if let Ok(pt) = sess.decrypt(&rm_alice_second) {
                 match_count += 1;
                 matched_key = Some(peer_key);
-                recovered   = Some(pt);
+                recovered = Some(pt);
                 // handle_session would save+return; we continue to catch false positives
                 // on Carol's and Dave's sessions (wrong header key → AEAD rejects, no state change).
             }
         }
 
-        assert_eq!(match_count, 1, "exactly one session must decrypt Alice's message");
+        assert_eq!(
+            match_count, 1,
+            "exactly one session must decrypt Alice's message"
+        );
         assert_eq!(
             matched_key.unwrap(),
             alice.x_pub(),

@@ -504,9 +504,8 @@ mod tests {
         let lb_v2 = Lockbox::seal_authenticated(&alice, &bob_card, payload)
             .expect("seal_authenticated must succeed");
 
-        let (recovered_payload, sender_opt) =
-            Lockbox::open_authenticated(&bob, &lb_v2.envelope)
-                .expect("open_authenticated on v2 box must succeed");
+        let (recovered_payload, sender_opt) = Lockbox::open_authenticated(&bob, &lb_v2.envelope)
+            .expect("open_authenticated on v2 box must succeed");
 
         assert_eq!(
             recovered_payload, payload,
@@ -516,16 +515,14 @@ mod tests {
         let sender_x_pub = sender_opt
             .expect("v2 box must return Some(sender_x_pub) — sender identity is in the AEAD");
 
-        let alice_x_pub: [u8; 32] =
-            x25519_dalek::PublicKey::from(&alice.x_secret).to_bytes();
+        let alice_x_pub: [u8; 32] = x25519_dalek::PublicKey::from(&alice.x_secret).to_bytes();
         assert_eq!(
             sender_x_pub, alice_x_pub,
             "recovered sender_x_pub must be Alice's static x25519 public key"
         );
 
         // Sanity: the recovered key is NOT Bob's key (rules out trivial pass).
-        let bob_x_pub: [u8; 32] =
-            x25519_dalek::PublicKey::from(&bob.x_secret).to_bytes();
+        let bob_x_pub: [u8; 32] = x25519_dalek::PublicKey::from(&bob.x_secret).to_bytes();
         assert_ne!(
             sender_x_pub, bob_x_pub,
             "recovered sender must differ from recipient"
@@ -533,12 +530,10 @@ mod tests {
 
         // ── (b) Anonymous v1 box → sender == None ────────────────────────────
         let bob_x_pub_key = x25519_dalek::PublicKey::from(&bob.x_secret);
-        let lb_v1 = Lockbox::seal(&bob_x_pub_key, payload)
-            .expect("anonymous seal must succeed");
+        let lb_v1 = Lockbox::seal(&bob_x_pub_key, payload).expect("anonymous seal must succeed");
 
-        let (recovered_v1, sender_v1) =
-            Lockbox::open_authenticated(&bob, &lb_v1.envelope)
-                .expect("open_authenticated on v1 box must succeed");
+        let (recovered_v1, sender_v1) = Lockbox::open_authenticated(&bob, &lb_v1.envelope)
+            .expect("open_authenticated on v1 box must succeed");
 
         assert_eq!(
             recovered_v1, payload,

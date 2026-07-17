@@ -37,7 +37,10 @@ const FRAME_BOOTSTRAP: u8 = 0x01;
 const FRAME_SESSION: u8 = 0x02;
 
 #[derive(Parser)]
-#[command(name = "darqual-tor-node", about = "Darqual node over Tor onion services")]
+#[command(
+    name = "darqual-tor-node",
+    about = "Darqual node over Tor onion services"
+)]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -93,7 +96,9 @@ async fn host_cmd(nickname: &str, port: u16) -> Result<()> {
     println!("[tor] onion service: {}", h.onion);
     println!("[tor] my address:    {}", identity.address());
     println!("[tor] sessions:      {}", store.dir().display());
-    println!("[tor] share the .onion above with senders. listening on port {port} (Ctrl-C to stop)…");
+    println!(
+        "[tor] share the .onion above with senders. listening on port {port} (Ctrl-C to stop)…"
+    );
 
     loop {
         match accept_one(&mut h, port).await {
@@ -235,7 +240,9 @@ async fn send_cmd(onion: &str, to: &str, message: &str, port: u16) -> Result<()>
     // i.e. until we have received at least one message from them (ckr is Some).
     let use_bootstrap_frame = !had_session || !sess.received_from_peer();
 
-    let rm = sess.encrypt(message.as_bytes()).context("ratchet encrypt")?;
+    let rm = sess
+        .encrypt(message.as_bytes())
+        .context("ratchet encrypt")?;
     // Persist advanced state IMMEDIATELY after encrypt.
     store
         .save(&card.x_pub, &sess)
