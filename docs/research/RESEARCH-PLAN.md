@@ -1,0 +1,86 @@
+# Darqual Research Plan
+
+## Phase 0: Artifact preservation
+
+- [x] Create annotated freeze tag `research-prototype-2026-07-17` at `033dba5`.
+- [x] Create and verify a complete Git bundle under `~/Jawz/backups/darqual-research-reset-2026-07-17/`.
+- [x] Preserve the pre-reset uncommitted remediation amendment as a patch.
+- [x] Start branch `research/rotating-committees` from the frozen commit.
+- [ ] Push the existing 12 local security commits and freeze tag after explicit release review.
+- [ ] Add an independent verification gate for the excluded `darqual-tor` workspace.
+
+## Phase 1: Research constitution
+
+- [x] Draft primary question and falsification criteria.
+- [x] Draft system model and leakage boundary.
+- [x] Draft security definitions.
+- [x] Draft protocol sketch.
+- [x] Draft novelty matrix.
+- [ ] Convert informal security properties into game-based definitions.
+- [ ] Review the constitution against the SoK taxonomy.
+
+## Phase 2: Literature closure
+
+- [ ] Fully annotate PingPong, Stadium, Karaoke, Express, Talek, Trellis, RPM, YOSO threshold service, FrodoPIR, and Pudding.
+- [ ] Add Groove, Pung, Vuvuzela, Loopix, XRD, Blinder, Atom, Clarion, and recent 2025–2026 work.
+- [ ] Produce a primitive-by-primitive trust and leakage comparison.
+- [ ] Search citations and citing works for equivalent rotating-service constructions.
+- [ ] Seek an external academic novelty check before implementation expansion.
+
+## Phase 3: Protocol analysis
+
+- [ ] Choose the fixed-committee threshold model.
+- [ ] Specify private write, notification, and retrieval primitives.
+- [ ] Specify participant-set commitment and exclusion behavior.
+- [ ] Specify handoff state and erasure requirements.
+- [ ] Prove or disprove cross-epoch privacy under mobile corruption.
+- [ ] Decide whether the commitment log needs consensus or only threshold certification.
+
+## Phase 4: Deterministic simulator
+
+- [ ] Build a separate simulation crate with deterministic clock and network.
+- [ ] Model clients, committees, epochs, message demand, and cover schedules.
+- [ ] Inject delay, loss, exclusion, equivocation, corruption, and churn.
+- [ ] Compare constant-rate and optimistic-indistinguishability traffic.
+- [ ] Measure anonymity-set size, leakage events, delivery, bandwidth, and recovery.
+
+## Phase 5: Fixed-committee vertical slice
+
+- [ ] Implement one private-write primitive with malicious-client validation.
+- [ ] Implement one private-notification primitive.
+- [ ] Implement full-window retrieval baseline.
+- [ ] Integrate versioned ratchet envelopes and directional addressing.
+- [ ] Demonstrate send while recipient is offline, later private notify and retrieve.
+
+## Phase 6: Rotation and handoff
+
+- [ ] Implement authenticated configured-registry committee rotation.
+- [ ] Implement proactive refresh or state migration.
+- [ ] Add certified epoch commitments and equivocation evidence.
+- [ ] Test mobile corruption and old-member post-service compromise.
+- [ ] Measure handoff latency, bandwidth, and availability.
+
+## Phase 7: Retrieval and storage evaluation
+
+- [ ] Integrate one PIR baseline and compare with full download.
+- [ ] Evaluate shuffle-model PIR under fixed epoch traffic.
+- [ ] Integrate erasure-coded immutable epoch storage if supported by the model.
+- [ ] Define retention and recovery under storage churn.
+
+## Phase 8: Network evaluation
+
+- [ ] Run the protocol over direct authenticated TCP.
+- [ ] Integrate Arti as an IP-hiding underlay.
+- [ ] Evaluate a delayed mix transport for global-observer mode.
+- [ ] Train traffic classifiers against packet traces and report inference accuracy.
+
+## Phase 9: External review and publication
+
+- [ ] Reproducible experiments and public artifact.
+- [ ] Cryptography and distributed-systems review.
+- [ ] Independent security audit only after protocol stability.
+- [ ] Draft for PoPETs/PETS, with NDSS/USENIX Security as alternatives depending on result.
+
+## Stop conditions
+
+Stop or pivot if novelty is preempted, assumptions become less realistic than PingPong's TEE model, committee handoff leaks state ownership, or measured costs fail to improve a meaningful point in the prior-art tradeoff space.
