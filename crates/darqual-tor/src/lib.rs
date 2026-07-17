@@ -24,7 +24,6 @@ use tor_proto::client::stream::IncomingStreamRequest;
 use tor_rtcompat::PreferredRuntime;
 
 const MAX_FRAME: usize = 16 * 1024 * 1024;
-const FRAME_ACK: u8 = 0x06;
 
 type Client = TorClient<PreferredRuntime>;
 
@@ -83,8 +82,6 @@ pub async fn accept_one(host: &mut Host, port: u16) -> anyhow::Result<Option<Vec
             IncomingStreamRequest::Begin(b) if b.port() == port => {
                 let mut ds = req.accept(Connected::new_empty()).await?;
                 let frame = read_frame(&mut ds).await?;
-                ds.write_all(&[FRAME_ACK]).await?;
-                ds.flush().await?;
                 return Ok(Some(frame));
             }
             _ => {
@@ -101,14 +98,7 @@ pub async fn dial_send(client: &Client, onion: &str, port: u16, data: &[u8]) -> 
     let mut stream = client.connect(addr).await.context("connect onion")?;
     write_frame(&mut stream, data).await?;
     stream.flush().await?;
-    wait_for_ack(&mut stream).await?;
-    Ok(())
-}
-
-async fn wait_for_ack<R: AsyncRead + Unpin>(reader: &mut R) -> anyhow::Result<()> {
-    let mut ack = [0u8; 1];
-    reader.read_exact(&mut ack).await?;
-    anyhow::ensure!(ack[0] == FRAME_ACK, "invalid delivery acknowledgement");
+    stream.close().await.ok();
     Ok(())
 }
 
@@ -133,18 +123,6 @@ async fn read_frame<R: AsyncRead + Unpin>(r: &mut R) -> anyhow::Result<Vec<u8>> 
 mod tests {
     use super::*;
     use std::time::Duration;
-
-    #[tokio::test]
-    async fn protocol_ack_is_required_after_delivery() {
-        let mut good = futures::io::Cursor::new(vec![FRAME_ACK]);
-        wait_for_ack(&mut good).await.expect("valid ACK");
-
-        let mut closed = futures::io::Cursor::new(Vec::<u8>::new());
-        assert!(wait_for_ack(&mut closed).await.is_err());
-
-        let mut wrong = futures::io::Cursor::new(vec![0x00]);
-        assert!(wait_for_ack(&mut wrong).await.is_err());
-    }
 
     /// Single-process onion round-trip over LIVE Tor: host a transient onion
     /// service, then dial our own `.onion` and exchange a message. The address
