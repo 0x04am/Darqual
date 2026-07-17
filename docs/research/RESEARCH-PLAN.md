@@ -38,9 +38,9 @@
 
 ## Phase 4: Deterministic simulator
 
-- [ ] Build a separate simulation crate with deterministic clock and network.
+- [x] Build a separate simulation crate with deterministic clock/event ordering and network-event vocabulary.
 - [ ] Model clients, committees, epochs, message demand, and cover schedules.
-- [ ] Inject delay, loss, exclusion, equivocation, corruption, and churn.
+- [x] Add initial delay/drop vocabulary, exclusion, corruption, finalization, handoff, and erasure events.
 - [ ] Compare constant-rate and optimistic-indistinguishability traffic.
 - [ ] Measure anonymity-set size, leakage events, delivery, bandwidth, and recovery.
 

@@ -1,0 +1,7 @@
+[package]
+name = "darqual-sim"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic adversarial simulator for Darqual research protocols"
+
+[dependencies]

@@ -8,6 +8,7 @@ members = [
     "crates/darqual-storage",
     "crates/darqual-committee",
     "crates/darqual-cover",
+    "crates/darqual-sim",
 ]
 resolver = "2"
 # darqual-tor (Arti/Tor) is EXCLUDED from the gated workspace — its ~350-crate
