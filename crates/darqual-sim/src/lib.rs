@@ -3,8 +3,9 @@
 mod committee;
 
 pub use committee::{
-    CommitteeSimulation, EquivocationEvidence, FetchOutcome, LeakageFacts, PageObservation,
-    RelayWriteOutcome, WriteOutcome,
+    CommitteeSimulation, EntryReplicationEvidence, EquivocationEvidence, FetchOutcome,
+    LeakageFacts, OmissionEvidence, PageObservation, RelayWriteOutcome, ReplicaObservation,
+    WriteOutcome,
 };
 
 use std::collections::{BTreeMap, BTreeSet};
