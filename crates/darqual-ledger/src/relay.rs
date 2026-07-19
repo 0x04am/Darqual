@@ -206,11 +206,12 @@ impl RelayState {
     }
 
     fn contains_entry(&self, candidate: &LedgerEntry) -> bool {
+        let fingerprint = entry_fingerprint(candidate);
         self.committed
             .iter()
             .flat_map(|block| &block.entries)
             .chain(&self.current_entries)
-            .any(|entry| entry == candidate)
+            .any(|entry| entry_fingerprint(entry) == fingerprint)
     }
 
     fn retained_envelope_bytes(&self) -> usize {
@@ -290,6 +291,14 @@ impl RelayState {
         }
         Ok(())
     }
+}
+
+fn entry_fingerprint(entry: &LedgerEntry) -> [u8; 32] {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&entry.label.0);
+    hasher.update(&entry.envelope);
+    hasher.update(&entry.nonce.to_le_bytes());
+    *hasher.finalize().as_bytes()
 }
 
 #[cfg(test)]
@@ -376,6 +385,30 @@ mod tests {
         let restored = RelayState::load(&path).expect("load");
         assert_eq!(restored.fetch(None), relay.fetch(None));
         assert_eq!(restored.window(), 2);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn repeated_save_replaces_snapshot_with_latest_valid_state() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        let dir =
+            std::env::temp_dir().join(format!("darqual-relay-replace-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+        relay
+            .submit(10, entry_for(&bob, 1, b"first", 0))
+            .expect("first");
+        relay.save(&path).expect("initial save");
+        relay
+            .submit(10, entry_for(&bob, 2, b"second", 0))
+            .expect("second");
+
+        relay.save(&path).expect("replacement save");
+        let restored = RelayState::load(&path).expect("load replacement");
+
+        assert_eq!(restored.fetch(None)[0].entries.len(), 2);
         fs::remove_dir_all(dir).expect("cleanup");
     }
 
