@@ -90,7 +90,12 @@ impl RelayState {
         })
     }
 
-    /// Return committed blocks plus a snapshot of the current in-progress epoch.
+    /// Return committed blocks plus a stable snapshot of the current in-progress epoch.
+    ///
+    /// Fetch is deliberately a pure read: elapsed wall-clock epochs do not fabricate
+    /// history or mutate the relay chain. A pending entry remains labelled with the
+    /// epoch in which the relay accepted it, so an offline recipient can still derive
+    /// the same label later.
     pub fn fetch(&self, since_epoch: Option<Epoch>) -> Vec<Block> {
         let mut blocks: Vec<Block> = self
             .committed
@@ -409,5 +414,33 @@ mod hardening_tests {
             .expect_err("oversized state must reject");
         assert!(matches!(err, RelayError::CapacityExceeded));
         assert_eq!(relay.fetch(None), before);
+    }
+
+    #[test]
+    fn large_idle_gap_does_not_fabricate_empty_epoch_chain() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        relay.submit(10, entry(&bob, 1, 8)).expect("submit");
+
+        let blocks = relay.fetch(None);
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].header.epoch, 10);
+        assert_eq!(blocks[0].entries.len(), 1);
+    }
+
+    #[test]
+    fn idle_time_does_not_rewrite_the_pending_epoch() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        relay.submit(10, entry(&bob, 1, 8)).expect("submit");
+
+        let first = relay.fetch(None);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let second = relay.fetch(None);
+
+        assert_eq!(second, first);
+        assert_eq!(second[0].header.epoch, 10);
+        assert_eq!(second[0].entries.len(), 1);
     }
 }
