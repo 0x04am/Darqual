@@ -5,3 +5,6 @@ edition = "2021"
 description = "Deterministic adversarial simulator for Darqual research protocols"
 
 [dependencies]
+darqual-committee = { path = "../darqual-committee" }
+darqual-core = { path = "../darqual-core" }
+darqual-ledger = { path = "../darqual-ledger" }

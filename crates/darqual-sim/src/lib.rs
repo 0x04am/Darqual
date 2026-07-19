@@ -1,5 +1,12 @@
 #![forbid(unsafe_code)]
 
+mod committee;
+
+pub use committee::{
+    CommitteeSimulation, EquivocationEvidence, FetchOutcome, LeakageFacts, PageObservation,
+    RelayWriteOutcome, WriteOutcome,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 
 pub type Epoch = u64;
