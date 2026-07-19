@@ -4,6 +4,7 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
+use bincode::Options;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -11,6 +12,9 @@ use crate::{Block, Epoch, LedgerEntry};
 
 const SNAPSHOT_VERSION: u8 = 1;
 const MAX_WINDOW: usize = 4096;
+const SNAPSHOT_OVERHEAD_BYTES: usize = 1024 * 1024;
+/// Maximum encoded relay snapshot size accepted before allocation/decoding.
+const MAX_RELAY_SNAPSHOT_BYTES: usize = MAX_RELAY_STATE_BYTES + SNAPSHOT_OVERHEAD_BYTES;
 /// Per-entry envelope limit shared with the Tier-1 wire protocol.
 pub const MAX_RELAY_ENVELOPE_BYTES: usize = 256 * 1024;
 /// Total opaque envelope bytes retained by one relay process.
@@ -147,9 +151,17 @@ impl RelayState {
     }
 
     pub fn load(path: &Path) -> Result<Self, RelayError> {
+        let file_len = fs::metadata(path)?.len();
+        if file_len > MAX_RELAY_SNAPSHOT_BYTES as u64 {
+            return Err(RelayError::CapacityExceeded);
+        }
         let bytes = fs::read(path)?;
-        let state: Self =
-            bincode::deserialize(&bytes).map_err(|e| RelayError::Decode(e.to_string()))?;
+        let state: Self = bincode::DefaultOptions::new()
+            .with_fixint_encoding()
+            .reject_trailing_bytes()
+            .with_limit(MAX_RELAY_SNAPSHOT_BYTES as u64)
+            .deserialize(&bytes)
+            .map_err(|e| RelayError::Decode(e.to_string()))?;
         state.validate()?;
         Ok(state)
     }
@@ -364,6 +376,44 @@ mod tests {
         let restored = RelayState::load(&path).expect("load");
         assert_eq!(restored.fetch(None), relay.fetch(None));
         assert_eq!(restored.window(), 2);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn snapshot_with_trailing_bytes_is_rejected() {
+        let dir =
+            std::env::temp_dir().join(format!("darqual-relay-trailing-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+        RelayState::new(4, 0)
+            .expect("relay")
+            .save(&path)
+            .expect("save");
+        let mut bytes = fs::read(&path).expect("read");
+        bytes.push(0xaa);
+        fs::write(&path, bytes).expect("append trailing byte");
+
+        let err = RelayState::load(&path).expect_err("trailing bytes must fail");
+
+        assert!(matches!(err, RelayError::Decode(_)));
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn oversized_snapshot_is_rejected_before_decode() {
+        let dir =
+            std::env::temp_dir().join(format!("darqual-relay-oversized-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+        let file = fs::File::create(&path).expect("create");
+        file.set_len(MAX_RELAY_SNAPSHOT_BYTES as u64 + 1)
+            .expect("make sparse oversized file");
+
+        let err = RelayState::load(&path).expect_err("oversized snapshot must fail");
+
+        assert!(matches!(err, RelayError::CapacityExceeded));
         fs::remove_dir_all(dir).expect("cleanup");
     }
 
