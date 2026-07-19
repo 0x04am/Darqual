@@ -28,8 +28,10 @@
 
 pub mod election;
 pub mod error;
+pub mod manifest;
 pub mod vrf;
 
 pub use election::{elect, is_member, seed_for_epoch, Candidate};
 pub use error::CommitteeError;
+pub use manifest::{CommitteeManifest, ManifestError, RelayEndpoint};
 pub use vrf::{vrf_eval, vrf_verify};

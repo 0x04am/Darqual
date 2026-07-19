@@ -7,3 +7,4 @@ edition = "2021"
 darqual-core = { path = "../darqual-core" }
 blake3 = "1"
 thiserror = "1"
+serde = { version = "1", features = ["derive"] }
