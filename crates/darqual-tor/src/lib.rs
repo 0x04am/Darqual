@@ -11,6 +11,8 @@
 //! uses `futures::io` traits, independent of darqual-net's tokio framing.
 #![allow(dead_code)]
 
+pub mod relay;
+
 use std::sync::Arc;
 
 use anyhow::Context;

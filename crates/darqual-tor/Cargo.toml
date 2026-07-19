@@ -21,6 +21,8 @@ rustls = { version = "0.23", features = ["ring"] }
 tracing = "0.1"
 anyhow = "1"
 darqual-core = { path = "../darqual-core" }
+darqual-ledger = { path = "../darqual-ledger" }
+serde = { version = "1", features = ["derive"] }
 clap = { version = "4", features = ["derive"] }
 bincode = "1"
 
