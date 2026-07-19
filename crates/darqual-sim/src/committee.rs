@@ -51,11 +51,15 @@ pub struct FetchOutcome {
 #[derive(Debug, Clone)]
 pub struct CommitteeSimulation {
     manifest: CommitteeManifest,
+    expected_pow_difficulty: u32,
 }
 
 impl CommitteeSimulation {
-    pub fn new(manifest: CommitteeManifest) -> Self {
-        Self { manifest }
+    pub fn new(manifest: CommitteeManifest, expected_pow_difficulty: u32) -> Self {
+        Self {
+            manifest,
+            expected_pow_difficulty,
+        }
     }
 
     pub fn aggregate_write(
@@ -91,6 +95,7 @@ impl CommitteeSimulation {
             let mut previous_epoch = None;
             for block in &page.blocks {
                 if !block.validate()
+                    || !block.validate_pow(self.expected_pow_difficulty)
                     || previous_epoch.is_some_and(|epoch| block.header.epoch <= epoch)
                 {
                     valid = false;
@@ -159,6 +164,15 @@ mod tests {
         CommitteeSimulation::new(
             CommitteeManifest::new(2, vec![endpoint("a"), endpoint("b"), endpoint("c")])
                 .expect("manifest"),
+            0,
+        )
+    }
+
+    fn simulation_with_pow(difficulty: u32) -> CommitteeSimulation {
+        CommitteeSimulation::new(
+            CommitteeManifest::new(2, vec![endpoint("a"), endpoint("b"), endpoint("c")])
+                .expect("manifest"),
+            difficulty,
         )
     }
 
@@ -207,6 +221,32 @@ mod tests {
         assert!(!outcome.leakage.global_observer_privacy_claimed);
         assert!(outcome.leakage.relays_observe_write);
         assert!(outcome.leakage.relays_observe_fetch);
+    }
+
+    #[test]
+    fn invalid_pow_page_is_isolated_without_losing_honest_entry() {
+        let entry = entry(9);
+        let honest_entry = LedgerEntry::mint(entry.label, entry.envelope.clone(), 12);
+        let honest = Block::new_at(10, [0; 32], vec![honest_entry.clone()], 600);
+        let mut invalid = entry.clone();
+        while invalid.pow_valid(12) {
+            invalid.nonce = invalid.nonce.wrapping_add(1);
+        }
+        let invalid_pow = Block::new_at(10, [0; 32], vec![invalid], 600);
+
+        let outcome = simulation_with_pow(12).aggregate_fetch(vec![
+            PageObservation {
+                relay: "a".into(),
+                blocks: vec![invalid_pow],
+            },
+            PageObservation {
+                relay: "b".into(),
+                blocks: vec![honest],
+            },
+        ]);
+
+        assert_eq!(outcome.rejected_relays, vec!["a"]);
+        assert_eq!(outcome.entries, vec![honest_entry]);
     }
 
     #[test]
