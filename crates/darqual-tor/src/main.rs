@@ -217,11 +217,14 @@ fn handle_relay_request(
         },
         Ok(RelayRequest::Fetch { since_epoch }) => match state.lock() {
             Err(_) => RelayResponse::Rejected("relay state lock poisoned".into()),
-            Ok(relay) => RelayResponse::Ledger(relay.fetch(since_epoch)),
+            Ok(relay) => RelayResponse::Ledger(darqual_tor::relay::LedgerPage {
+                blocks: relay.fetch(since_epoch),
+                truncated: false,
+            }),
         },
     };
     match &response {
-        RelayResponse::Ledger(blocks) => encode_ledger_response_bounded(blocks.clone()),
+        RelayResponse::Ledger(page) => encode_ledger_response_bounded(page.blocks.clone()),
         _ => encode_response(&response),
     }
     .unwrap_or_else(|e| {
@@ -283,7 +286,13 @@ async fn drop_fetch_cmd(
     let identity =
         Identity::load(&id_path).context("failed to load identity — run `darqual keygen` first")?;
     let blocks = match relay_round_trip(relay, port, &RelayRequest::Fetch { since_epoch }).await? {
-        RelayResponse::Ledger(blocks) => blocks,
+        RelayResponse::Ledger(page) => {
+            anyhow::ensure!(
+                !page.truncated,
+                "relay response was truncated; narrow --since-epoch before trusting completeness"
+            );
+            page.blocks
+        }
         RelayResponse::Rejected(reason) => anyhow::bail!("relay rejected fetch: {reason}"),
         RelayResponse::Accepted { .. } => anyhow::bail!("relay returned an unexpected receipt"),
     };
@@ -549,7 +558,13 @@ mod tier1_tests {
         let fetch = encode_request(&RelayRequest::Fetch { since_epoch: None }).expect("encode");
         let after = decode_response(&handle_relay_request(&state, &path, &fetch))
             .expect("decode valid response");
-        assert_eq!(after, RelayResponse::Ledger(Vec::new()));
+        assert_eq!(
+            after,
+            RelayResponse::Ledger(darqual_tor::relay::LedgerPage {
+                blocks: Vec::new(),
+                truncated: false,
+            })
+        );
         fs::remove_dir_all(dir).expect("cleanup");
     }
 

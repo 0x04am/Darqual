@@ -16,10 +16,18 @@ pub enum RelayRequest {
     Fetch { since_epoch: Option<Epoch> },
 }
 
+/// Encodable ledger page. `truncated` tells clients that older matching
+/// blocks were omitted to honor the response byte ceiling.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LedgerPage {
+    pub blocks: Vec<Block>,
+    pub truncated: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RelayResponse {
     Accepted { epoch: Epoch, entries: u32 },
-    Ledger(Vec<Block>),
+    Ledger(LedgerPage),
     Rejected(String),
 }
 
@@ -47,9 +55,9 @@ pub fn decode_request(bytes: &[u8]) -> anyhow::Result<RelayRequest> {
 }
 
 pub fn encode_response(response: &RelayResponse) -> anyhow::Result<Vec<u8>> {
-    if let RelayResponse::Ledger(blocks) = response {
+    if let RelayResponse::Ledger(page) = response {
         anyhow::ensure!(
-            blocks.len() <= MAX_FETCH_BLOCKS,
+            page.blocks.len() <= MAX_FETCH_BLOCKS,
             "ledger response exceeds {MAX_FETCH_BLOCKS} blocks"
         );
     }
@@ -66,34 +74,39 @@ pub fn encode_ledger_response_bounded(blocks: Vec<Block>) -> anyhow::Result<Vec<
         blocks.len() <= MAX_FETCH_BLOCKS,
         "ledger response exceeds {MAX_FETCH_BLOCKS} blocks"
     );
-    if let Ok(encoded) = encode_response(&RelayResponse::Ledger(blocks.clone())) {
+    let full = RelayResponse::Ledger(LedgerPage {
+        blocks: blocks.clone(),
+        truncated: false,
+    });
+    if let Ok(encoded) = encode_response(&full) {
         return Ok(encoded);
     }
     let mut low = 0usize;
     let mut high = blocks.len();
     while low < high {
         let mid = (low + high).div_ceil(2);
-        if encode_response(&RelayResponse::Ledger(
-            blocks[blocks.len() - mid..].to_vec(),
-        ))
-        .is_ok()
-        {
+        let page = RelayResponse::Ledger(LedgerPage {
+            blocks: blocks[blocks.len() - mid..].to_vec(),
+            truncated: true,
+        });
+        if encode_response(&page).is_ok() {
             low = mid;
         } else {
             high = mid - 1;
         }
     }
     anyhow::ensure!(low > 0, "even one ledger block exceeds relay payload limit");
-    encode_response(&RelayResponse::Ledger(
-        blocks[blocks.len() - low..].to_vec(),
-    ))
+    encode_response(&RelayResponse::Ledger(LedgerPage {
+        blocks: blocks[blocks.len() - low..].to_vec(),
+        truncated: true,
+    }))
 }
 
 pub fn decode_response(bytes: &[u8]) -> anyhow::Result<RelayResponse> {
     let response: RelayResponse = decode_bounded(bytes)?;
-    if let RelayResponse::Ledger(blocks) = &response {
+    if let RelayResponse::Ledger(page) = &response {
         anyhow::ensure!(
-            blocks.len() <= MAX_FETCH_BLOCKS,
+            page.blocks.len() <= MAX_FETCH_BLOCKS,
             "ledger response exceeds {MAX_FETCH_BLOCKS} blocks"
         );
     }
@@ -192,14 +205,19 @@ mod tests {
             prev = block.hash();
             blocks.push(block);
         }
-        assert!(encode_response(&RelayResponse::Ledger(blocks.clone())).is_err());
+        assert!(encode_response(&RelayResponse::Ledger(LedgerPage {
+            blocks: blocks.clone(),
+            truncated: false,
+        }))
+        .is_err());
 
         let encoded = encode_ledger_response_bounded(blocks).expect("bounded encode");
         let RelayResponse::Ledger(returned) = decode_response(&encoded).expect("decode") else {
             panic!("expected ledger response");
         };
-        assert!(!returned.is_empty());
-        assert_eq!(returned.last().expect("last").header.epoch, 39);
+        assert!(returned.truncated);
+        assert!(!returned.blocks.is_empty());
+        assert_eq!(returned.blocks.last().expect("last").header.epoch, 39);
         assert!(encoded.len() <= MAX_RELAY_PAYLOAD);
     }
 }
