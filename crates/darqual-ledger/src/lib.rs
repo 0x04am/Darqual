@@ -12,7 +12,7 @@ pub use block::{Block, BlockHeader, LedgerEntry};
 pub use epoch::{epoch_at, epoch_now, Epoch, EPOCH_SECONDS};
 pub use ledger::{Ledger, LedgerError};
 pub use merkle::{merkle_proof, merkle_root, verify_proof, MerkleProof, EMPTY_ROOT};
-pub use notify::{fetch_open, notify};
+pub use notify::{fetch_open, fetch_open_adjacent_epochs, notify};
 pub use relay::{
     RelayError, RelayReceipt, RelayState, MAX_RELAY_ENVELOPE_BYTES, MAX_RELAY_STATE_BYTES,
 };
@@ -174,6 +174,29 @@ mod tests {
         // Mutate envelope after construction — Merkle root no longer matches.
         block.entries[0].envelope = b"tampered".to_vec();
         assert!(!block.validate());
+    }
+
+    #[test]
+    fn adjacent_epoch_trial_open_handles_sender_relay_clock_skew() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let sender_epoch = 120;
+        let relay_epoch = sender_epoch + 1;
+        let plaintext = b"crossed the epoch boundary";
+        let alice_to_bob = Conversation::new(&alice, &bob.contact_card());
+        let (label, envelope) = alice_to_bob
+            .seal(&bob.contact_card(), sender_epoch, plaintext)
+            .expect("seal");
+        let block = Block::new(
+            relay_epoch,
+            [0; 32],
+            vec![LedgerEntry::mint(label, envelope, 0)],
+        );
+        let bob_from_alice = Conversation::new(&bob, &alice.contact_card());
+
+        let received = fetch_open_adjacent_epochs(&bob_from_alice, &block, &bob);
+
+        assert_eq!(received, vec![plaintext.to_vec()]);
     }
 
     #[test]

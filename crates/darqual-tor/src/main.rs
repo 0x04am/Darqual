@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use darqual_core::{ContactCard, Conversation, Identity, Lockbox, RatchetMessage, SessionStore};
-use darqual_ledger::{epoch_now, fetch_open, LedgerEntry, RelayState};
+use darqual_ledger::{epoch_now, fetch_open_adjacent_epochs, LedgerEntry, RelayState};
 use darqual_tor::relay::{
     decode_request, decode_response, encode_ledger_response_bounded, encode_request,
     encode_response, RelayRequest, RelayResponse,
@@ -300,7 +300,7 @@ async fn drop_fetch_cmd(
     let conv = Conversation::new(&identity, &sender);
     let mut found = 0usize;
     for block in &blocks {
-        for message in fetch_open(&conv, block.header.epoch, block, &identity) {
+        for message in fetch_open_adjacent_epochs(&conv, block, &identity) {
             println!("[drop-recv] {}", String::from_utf8_lossy(&message));
             found += 1;
         }

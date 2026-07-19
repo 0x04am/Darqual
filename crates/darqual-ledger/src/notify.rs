@@ -21,3 +21,21 @@ pub fn fetch_open(conv: &Conversation, epoch: u64, block: &Block, me: &Identity)
         })
         .collect()
 }
+
+/// Open entries whose sender clock was within one epoch of the relay-stamped block.
+///
+/// Tor bootstrap and network delay can cross the 60-second epoch boundary between
+/// sealing and relay acceptance. Trying the adjacent labels preserves delivery while
+/// bounding work to three labels per block.
+pub fn fetch_open_adjacent_epochs(
+    conv: &Conversation,
+    block: &Block,
+    me: &Identity,
+) -> Vec<Vec<u8>> {
+    let epoch = block.header.epoch;
+    let mut opened = Vec::new();
+    for candidate in [epoch.saturating_sub(1), epoch, epoch.saturating_add(1)] {
+        opened.extend(fetch_open(conv, candidate, block, me));
+    }
+    opened
+}
