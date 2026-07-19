@@ -73,14 +73,20 @@ pub fn encode_ledger_response_bounded(blocks: Vec<Block>) -> anyhow::Result<Vec<
     let mut high = blocks.len();
     while low < high {
         let mid = (low + high).div_ceil(2);
-        if encode_response(&RelayResponse::Ledger(blocks[blocks.len() - mid..].to_vec())).is_ok() {
+        if encode_response(&RelayResponse::Ledger(
+            blocks[blocks.len() - mid..].to_vec(),
+        ))
+        .is_ok()
+        {
             low = mid;
         } else {
             high = mid - 1;
         }
     }
     anyhow::ensure!(low > 0, "even one ledger block exceeds relay payload limit");
-    encode_response(&RelayResponse::Ledger(blocks[blocks.len() - low..].to_vec()))
+    encode_response(&RelayResponse::Ledger(
+        blocks[blocks.len() - low..].to_vec(),
+    ))
 }
 
 pub fn decode_response(bytes: &[u8]) -> anyhow::Result<RelayResponse> {
@@ -166,7 +172,8 @@ mod tests {
 
     #[test]
     fn trailing_bytes_are_rejected() {
-        let mut encoded = encode_request(&RelayRequest::Fetch { since_epoch: None }).expect("encode");
+        let mut encoded =
+            encode_request(&RelayRequest::Fetch { since_epoch: None }).expect("encode");
         encoded.push(0);
         assert!(decode_request(&encoded).is_err());
     }

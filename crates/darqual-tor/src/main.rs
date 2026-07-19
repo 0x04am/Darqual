@@ -232,11 +232,7 @@ fn handle_relay_request(
     })
 }
 
-async fn relay_round_trip(
-    relay: &str,
-    port: u16,
-    request: &RelayRequest,
-) -> Result<RelayResponse> {
+async fn relay_round_trip(relay: &str, port: u16, request: &RelayRequest) -> Result<RelayResponse> {
     println!("[tor] bootstrapping onto the Tor network…");
     let client = bootstrap().await.context("bootstrap")?;
     let request = encode_request(request).context("encode relay request")?;
@@ -280,7 +276,9 @@ async fn drop_fetch_cmd(
     port: u16,
     since_epoch: Option<u64>,
 ) -> Result<()> {
-    let sender = from.parse::<ContactCard>().context("invalid contact card")?;
+    let sender = from
+        .parse::<ContactCard>()
+        .context("invalid contact card")?;
     let id_path = Identity::default_path().context("could not determine identity path")?;
     let identity =
         Identity::load(&id_path).context("failed to load identity — run `darqual keygen` first")?;
@@ -298,7 +296,10 @@ async fn drop_fetch_cmd(
             found += 1;
         }
     }
-    println!("[drop-fetch] relay={relay} blocks={} messages={found}", blocks.len());
+    println!(
+        "[drop-fetch] relay={relay} blocks={} messages={found}",
+        blocks.len()
+    );
     Ok(())
 }
 
