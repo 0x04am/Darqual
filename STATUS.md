@@ -19,6 +19,10 @@ Alice→relay→Bob, Eve rejection, sender exit, restart persistence, plaintext 
 request recovery, replay rejection, bounded snapshots, and one-epoch clock skew. See
 `docs/TIER1-LIVE-VERIFICATION.md`.
 
+**Compatibility:** the explicit `LedgerPage { blocks, truncated }` response introduced at
+`fe9b5ca` is not wire-compatible with earlier feature-branch relay/client binaries. Rebuild both
+ends from the same feature revision.
+
 **Scope boundary:** this closes the *application wiring* gap for an async MVP, not the research
 mission. One relay still observes write/read timing; there is no DPF private write, PIR private
 read, mandatory cover schedule, or multi-relay anytrust protocol. Therefore full contact-graph

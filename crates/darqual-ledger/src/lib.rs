@@ -177,6 +177,24 @@ mod tests {
     }
 
     #[test]
+    fn adjacent_epoch_trial_at_genesis_does_not_duplicate_plaintext() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let epoch = 0;
+        let plaintext = b"genesis epoch message";
+        let alice_to_bob = Conversation::new(&alice, &bob.contact_card());
+        let (label, envelope) = alice_to_bob
+            .seal(&bob.contact_card(), epoch, plaintext)
+            .expect("seal");
+        let block = Block::new(epoch, [0; 32], vec![LedgerEntry::mint(label, envelope, 0)]);
+        let bob_from_alice = Conversation::new(&bob, &alice.contact_card());
+
+        let received = fetch_open_adjacent_epochs(&bob_from_alice, &block, &bob);
+
+        assert_eq!(received, vec![plaintext.to_vec()]);
+    }
+
+    #[test]
     fn adjacent_epoch_trial_open_handles_sender_relay_clock_skew() {
         let alice = Identity::generate();
         let bob = Identity::generate();

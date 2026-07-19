@@ -33,9 +33,15 @@ pub fn fetch_open_adjacent_epochs(
     me: &Identity,
 ) -> Vec<Vec<u8>> {
     let epoch = block.header.epoch;
+    let candidates = [epoch.saturating_sub(1), epoch, epoch.saturating_add(1)];
     let mut opened = Vec::new();
-    for candidate in [epoch.saturating_sub(1), epoch, epoch.saturating_add(1)] {
+    let mut previous = None;
+    for candidate in candidates {
+        if previous == Some(candidate) {
+            continue;
+        }
         opened.extend(fetch_open(conv, candidate, block, me));
+        previous = Some(candidate);
     }
     opened
 }

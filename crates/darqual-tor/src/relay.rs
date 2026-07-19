@@ -70,13 +70,15 @@ pub fn encode_response(response: &RelayResponse) -> anyhow::Result<Vec<u8>> {
 /// the relay available and lets clients advance `since_epoch` instead of turning
 /// a large ledger into a permanent rejected response.
 pub fn encode_ledger_response_bounded(blocks: Vec<Block>) -> anyhow::Result<Vec<u8>> {
-    anyhow::ensure!(
-        blocks.len() <= MAX_FETCH_BLOCKS,
-        "ledger response exceeds {MAX_FETCH_BLOCKS} blocks"
-    );
+    let count_truncated = blocks.len() > MAX_FETCH_BLOCKS;
+    let blocks = if count_truncated {
+        blocks[blocks.len() - MAX_FETCH_BLOCKS..].to_vec()
+    } else {
+        blocks
+    };
     let full = RelayResponse::Ledger(LedgerPage {
         blocks: blocks.clone(),
-        truncated: false,
+        truncated: count_truncated,
     });
     if let Ok(encoded) = encode_response(&full) {
         return Ok(encoded);
@@ -189,6 +191,30 @@ mod tests {
             encode_request(&RelayRequest::Fetch { since_epoch: None }).expect("encode");
         encoded.push(0);
         assert!(decode_request(&encoded).is_err());
+    }
+
+    #[test]
+    fn block_count_above_cap_returns_newest_truncated_page() {
+        let mut blocks = Vec::with_capacity(MAX_FETCH_BLOCKS + 1);
+        let mut prev = [0u8; 32];
+        for epoch in 0..=MAX_FETCH_BLOCKS as u64 {
+            let block = Block::new(epoch, prev, Vec::new());
+            prev = block.hash();
+            blocks.push(block);
+        }
+
+        let encoded = encode_ledger_response_bounded(blocks).expect("bounded encode");
+        let RelayResponse::Ledger(page) = decode_response(&encoded).expect("decode") else {
+            panic!("expected ledger response");
+        };
+
+        assert!(page.truncated);
+        assert_eq!(page.blocks.len(), MAX_FETCH_BLOCKS);
+        assert_eq!(page.blocks.first().expect("first").header.epoch, 1);
+        assert_eq!(
+            page.blocks.last().expect("last").header.epoch,
+            MAX_FETCH_BLOCKS as u64
+        );
     }
 
     #[test]

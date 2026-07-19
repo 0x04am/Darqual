@@ -52,6 +52,8 @@ snapshot decoding, and one-epoch sender/relay clock skew.
 - Public block retrieval does not let a wrong recipient decrypt Bob's lockbox.
 - The relay stores ciphertext and labels, not plaintext.
 
+## Properties covered by automated tests on this branch
+
 - Fetch pages report truncation explicitly; clients fail closed rather than assuming silently omitted history is complete.
 - Relay snapshot decoding is bounded and rejects trailing bytes.
 - Byte-identical retained entry replays are rejected; client-side read deduplication/read receipts are still absent.
