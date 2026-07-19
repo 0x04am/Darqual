@@ -107,12 +107,13 @@ construction — production must use standard ECVRF (RFC 9381).
 ---
 
 ## Known gaps (do not pretend these are closed)
-1. **Anonymity layer not wired into the running node** — Tor transport is LIVE (S222) and content
-   crypto (deniable auth + FS/PCS + encrypted headers) is wired, but the node still does a **direct
-   onion dial, both-online**. The dead-drop ledger / keywheel labels / cover traffic exist as
-   *libraries* and are NOT yet in the send/receive path. So who-talks-to-whom darkness is, in the
-   running node *today*, still aspirational — Tor hides IPs, but it's a direct connection, not async
-   dead-drops. **This is the #1 gap to close next.**
+1. **Tier-1 is wired; full anonymity is not** — branch `feat/tier1-dead-drop-mvp` adds a
+   persistent single-relay async path over Tor. In dead-drop mode Alice and Bob dial only the relay,
+   not each other, and Bob can retrieve after being offline. This closes the running app's direct
+   peer-dial requirement for the MVP. **Residual:** one relay sees write/read timing; writes are not
+   DPF-private, reads are not PIR-private, cover traffic is not mandatory, and no multi-relay
+   anytrust committee runs the protocol. Who-talks-to-whom darkness against a global observer is
+   therefore still aspirational. See `docs/TIER1-LIVE-VERIFICATION.md`.
 2. **PIR not implemented** — networked retrieval by label leaks the label. Whole-block fetch avoids
    intra-block leak but doesn't scale; PIR is the real fix.
 3. **Full RLN / DPF / IBE / Loopix-Sphinx** — all documented, none implemented (research-grade crypto).
@@ -134,9 +135,9 @@ construction — production must use standard ECVRF (RFC 9381).
 - [ ] External professional security audit
 - [x] Tor/Arti transport (S222 — IP-leak killed)
 - [x] Content forward secrecy + PCS (Double Ratchet, S222)
-- [ ] **Wire the dead-drop ledger / keywheel / cover traffic into the node** (close gap #1 — the
-      jump from direct-dial to async metadata-darkness; this is the mission's core, and it's
-      *engineering*, not research)
+- [x] **Wire a Tier-1 single-relay dead-drop path into the node** (2026-07-19 — async/offline,
+      no direct Alice→Bob dial; see live verification). **Residual:** keywheel persistence, mandatory
+      cover, DPF/PIR, and multi-relay anytrust are still open before the mission claim is credible.
 - [ ] PIR retrieval (close the label-fetch leak)
 - [ ] Constant-time review of all secret-dependent paths
 - [ ] Real closed beta with adversarial testing
@@ -147,7 +148,8 @@ construction — production must use standard ECVRF (RFC 9381).
 > list is about Darqual being a credible *anonymity system against mass observation*, not a
 > bodyguard for a marked individual.
 
-**Bottom line:** Darqual is a working, tested *spine* of a metadata-resistant messenger with
-strong content crypto (deniable auth + FS/PCS + encrypted headers) live over Tor, and every other
-tractable mechanism built as a library and honestly labeled. The anonymity layer is built but not
-yet wired into the running node. It is a research prototype. Treat it as one.
+**Bottom line:** Darqual now has two running paths: strong content crypto over a direct Tor dial,
+and a Tier-1 persistent async dead-drop path where both peers contact only one relay. The latter is
+a real store-and-forward MVP, not the finished anonymity system: its single relay still exposes
+access timing, and private writes/reads, mandatory cover, and multi-relay anytrust remain open. It
+is an unaudited research prototype. Treat it as one.

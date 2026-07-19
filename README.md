@@ -12,6 +12,10 @@
 >   cut), or the fact that *using* it may itself be detectable.
 > - **It does not yet even deliver contact-graph privacy in the running app** — the current node
 >   does a *direct connection*; the dead-drop layer that hides who-talks-to-whom is unwired.
+> - **Tier-1 update:** a single-relay async dead-drop path is now wired on branch
+>   `feat/tier1-dead-drop-mvp`: sender and receiver dial only the relay, and offline delivery works.
+>   This still does **NOT** deliver global-observer contact-graph privacy — the relay sees access
+>   timing, and DPF/PIR/mandatory cover/multi-relay anytrust remain open.
 > - **If a government is hunting you specifically, this is not your shield.** Use [Briar](https://briarproject.org)
 >   / Signal + operational security + physical safety, and get out with help.
 >

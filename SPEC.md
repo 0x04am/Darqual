@@ -24,6 +24,12 @@ Full architecture rationale + the 7-paper synthesis live in
   **content** anonymity (deniable auth, FS/PCS, encrypted headers) over Tor, but **sends/receives
   are NOT yet unlinkable in practice** — the node still does a *direct onion dial* and the dead-drop
   / cover-traffic layer that would hide who-talks-to-whom is built as libraries but **not wired in**.
+  - **Tier-1 update (2026-07-19):** the branch `feat/tier1-dead-drop-mvp` now offers an
+    explicit single-relay async mode: both parties dial only a persistent relay onion via
+    `drop-send` / `drop-fetch`. This closes the direct peer-dial requirement for the MVP and
+    works while the recipient is offline. It does **not** deliver the full design target:
+    a single relay still exposes write/read timing, and DPF/PIR/mandatory cover/multi-relay
+    anytrust are not wired. Contact-graph privacy against a global observer remains a target.
   Contact-graph privacy is **design intent, not a current guarantee.** See THREAT-MODEL.md gap #1.
 - **Is not:** a real-time WhatsApp clone. Darqual is **async by nature** (the latency *is* the
   anonymity — Anonymity Trilemma, Das et al. S&P'18). Think: *email even a nation-state can't

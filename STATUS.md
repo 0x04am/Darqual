@@ -7,6 +7,35 @@ Last update: S222 (2026-06-26) — content-crypto layer + live Tor transport + s
 
 ---
 
+## Tier-1 async dead-drop MVP (2026-07-19) — ✅ WIRED, single-relay scope
+
+The direct-dial gap now has a working **single-relay async path** on branch
+`feat/tier1-dead-drop-mvp`. `darqual-tor-node relay` hosts a persistent PoW-gated hot-window
+ledger on a Tor v3 onion; `drop-send` submits labelled lockboxes to that relay; `drop-fetch`
+retrieves public blocks and opens only the recipient's matching label. Alice and Bob never dial
+each other in this mode. A live avante-relay / jade-client test proved offline delivery,
+wrong-recipient rejection, and relay-restart persistence; see `docs/TIER1-LIVE-VERIFICATION.md`.
+
+**Scope boundary:** this closes the *application wiring* gap for an async MVP, not the research
+mission. One relay still observes write/read timing; there is no DPF private write, PIR private
+read, mandatory cover schedule, or multi-relay anytrust protocol. Therefore full contact-graph
+privacy against a global passive observer remains **NOT delivered**.
+
+Commands:
+
+```bash
+# Relay
++darqual-tor-node relay --state ~/.darqual/relay-ledger.bin --window 60 --pow-difficulty 12
+
+# Alice (only the relay onion is supplied; there is no Bob onion argument)
+darqual-tor-node drop-send --relay <relay>.onion --to dqcard1... --message "hello"
+
+# Bob, later/offline-safe
+darqual-tor-node drop-fetch --relay <relay>.onion --from dqcard1...
+```
+
+---
+
 ## Verification policy
 Nothing is marked ✅ without `scripts/verify.sh` GREEN (cargo build + cargo test +
 clippy -D warnings + live messaging demo) and a git commit. Agent reports are verified
