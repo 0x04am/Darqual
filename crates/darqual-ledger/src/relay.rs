@@ -206,12 +206,12 @@ impl RelayState {
     }
 
     fn contains_entry(&self, candidate: &LedgerEntry) -> bool {
-        let fingerprint = entry_fingerprint(candidate);
+        let fingerprint = candidate.id();
         self.committed
             .iter()
             .flat_map(|block| &block.entries)
             .chain(&self.current_entries)
-            .any(|entry| entry_fingerprint(entry) == fingerprint)
+            .any(|entry| entry.id() == fingerprint)
     }
 
     fn retained_envelope_bytes(&self) -> usize {
@@ -291,14 +291,6 @@ impl RelayState {
         }
         Ok(())
     }
-}
-
-fn entry_fingerprint(entry: &LedgerEntry) -> [u8; 32] {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(&entry.label.0);
-    hasher.update(&entry.envelope);
-    hasher.update(&entry.nonce.to_le_bytes());
-    *hasher.finalize().as_bytes()
 }
 
 #[cfg(test)]

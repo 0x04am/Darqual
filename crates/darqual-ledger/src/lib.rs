@@ -313,6 +313,28 @@ mod tests {
     }
 
     #[test]
+    fn ledger_entry_id_is_stable_and_commits_every_field() {
+        let base = LedgerEntry {
+            label: Label([7; 16]),
+            envelope: b"ciphertext".to_vec(),
+            nonce: 42,
+        };
+        assert_eq!(base.id(), base.clone().id());
+
+        let mut changed_label = base.clone();
+        changed_label.label = Label([8; 16]);
+        assert_ne!(base.id(), changed_label.id());
+
+        let mut changed_envelope = base.clone();
+        changed_envelope.envelope.push(0);
+        assert_ne!(base.id(), changed_envelope.id());
+
+        let mut changed_nonce = base.clone();
+        changed_nonce.nonce += 1;
+        assert_ne!(base.id(), changed_nonce.id());
+    }
+
+    #[test]
     fn block_empty_has_empty_root() {
         let block = Block::new(0, [0u8; 32], vec![]);
         assert_eq!(block.header.merkle_root, EMPTY_ROOT);

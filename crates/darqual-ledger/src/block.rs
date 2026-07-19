@@ -40,6 +40,16 @@ impl LedgerEntry {
         v
     }
 
+    /// Stable identifier for this exact logical write across replicated relays.
+    ///
+    /// Domain separation prevents accidental reuse as a generic block or envelope hash.
+    pub fn id(&self) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"darqual-ledger-entry-id-v1");
+        hasher.update(&self.canonical_bytes());
+        *hasher.finalize().as_bytes()
+    }
+
     /// Check that this entry's PoW stamp is valid for the given minimum difficulty.
     ///
     /// Always returns `true` when `difficulty == 0`.
