@@ -24,6 +24,8 @@ pub enum RelayError {
     InvalidPoW(u32),
     #[error("relay storage capacity exceeded")]
     CapacityExceeded,
+    #[error("duplicate entry already retained by relay")]
+    Duplicate,
     #[error("relay epoch moved backward from {current} to {got}")]
     EpochRegression { current: Epoch, got: Epoch },
     #[error("relay snapshot I/O failed: {0}")]
@@ -73,6 +75,9 @@ impl RelayState {
     ) -> Result<RelayReceipt, RelayError> {
         if !entry.pow_valid(self.pow_difficulty) {
             return Err(RelayError::InvalidPoW(self.pow_difficulty));
+        }
+        if self.contains_entry(&entry) {
+            return Err(RelayError::Duplicate);
         }
         if entry.envelope.len() > MAX_RELAY_ENVELOPE_BYTES
             || self
@@ -186,6 +191,14 @@ impl RelayState {
 
     fn tip_hash(&self) -> [u8; 32] {
         self.committed.last().map_or([0u8; 32], Block::hash)
+    }
+
+    fn contains_entry(&self, candidate: &LedgerEntry) -> bool {
+        self.committed
+            .iter()
+            .flat_map(|block| &block.entries)
+            .chain(&self.current_entries)
+            .any(|entry| entry == candidate)
     }
 
     fn retained_envelope_bytes(&self) -> usize {
@@ -427,6 +440,22 @@ mod hardening_tests {
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].header.epoch, 10);
         assert_eq!(blocks[0].entries.len(), 1);
+    }
+
+    #[test]
+    fn duplicate_entry_is_rejected_without_mutation() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        let repeated = entry(&bob, 4, 8);
+        relay.submit(10, repeated.clone()).expect("first submit");
+        let before = relay.fetch(None);
+
+        let err = relay
+            .submit(10, repeated)
+            .expect_err("duplicate must be rejected");
+
+        assert!(matches!(err, RelayError::Duplicate));
+        assert_eq!(relay.fetch(None), before);
     }
 
     #[test]
