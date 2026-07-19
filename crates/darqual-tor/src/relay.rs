@@ -56,6 +56,33 @@ pub fn encode_response(response: &RelayResponse) -> anyhow::Result<Vec<u8>> {
     encode_bounded(response)
 }
 
+/// Encode as many newest ledger blocks as fit in one bounded response.
+///
+/// A full hot window may exceed one Tor frame. Returning the newest suffix keeps
+/// the relay available and lets clients advance `since_epoch` instead of turning
+/// a large ledger into a permanent rejected response.
+pub fn encode_ledger_response_bounded(blocks: Vec<Block>) -> anyhow::Result<Vec<u8>> {
+    anyhow::ensure!(
+        blocks.len() <= MAX_FETCH_BLOCKS,
+        "ledger response exceeds {MAX_FETCH_BLOCKS} blocks"
+    );
+    if let Ok(encoded) = encode_response(&RelayResponse::Ledger(blocks.clone())) {
+        return Ok(encoded);
+    }
+    let mut low = 0usize;
+    let mut high = blocks.len();
+    while low < high {
+        let mid = (low + high).div_ceil(2);
+        if encode_response(&RelayResponse::Ledger(blocks[blocks.len() - mid..].to_vec())).is_ok() {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    anyhow::ensure!(low > 0, "even one ledger block exceeds relay payload limit");
+    encode_response(&RelayResponse::Ledger(blocks[blocks.len() - low..].to_vec()))
+}
+
 pub fn decode_response(bytes: &[u8]) -> anyhow::Result<RelayResponse> {
     let response: RelayResponse = decode_bounded(bytes)?;
     if let RelayResponse::Ledger(blocks) = &response {
@@ -142,5 +169,30 @@ mod tests {
         let mut encoded = encode_request(&RelayRequest::Fetch { since_epoch: None }).expect("encode");
         encoded.push(0);
         assert!(decode_request(&encoded).is_err());
+    }
+
+    #[test]
+    fn oversized_ledger_response_returns_the_newest_bounded_suffix() {
+        let huge = vec![9u8; MAX_ENTRY_ENVELOPE];
+        let mut blocks = Vec::new();
+        let mut prev = [0u8; 32];
+        for epoch in 0..40 {
+            let block = Block::new(
+                epoch,
+                prev,
+                vec![LedgerEntry::mint(Label([epoch as u8; 16]), huge.clone(), 0)],
+            );
+            prev = block.hash();
+            blocks.push(block);
+        }
+        assert!(encode_response(&RelayResponse::Ledger(blocks.clone())).is_err());
+
+        let encoded = encode_ledger_response_bounded(blocks).expect("bounded encode");
+        let RelayResponse::Ledger(returned) = decode_response(&encoded).expect("decode") else {
+            panic!("expected ledger response");
+        };
+        assert!(!returned.is_empty());
+        assert_eq!(returned.last().expect("last").header.epoch, 39);
+        assert!(encoded.len() <= MAX_RELAY_PAYLOAD);
     }
 }

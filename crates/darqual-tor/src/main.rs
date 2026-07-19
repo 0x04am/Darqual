@@ -34,7 +34,8 @@ use clap::{Parser, Subcommand};
 use darqual_core::{ContactCard, Conversation, Identity, Lockbox, RatchetMessage, SessionStore};
 use darqual_ledger::{epoch_now, fetch_open, LedgerEntry, RelayState};
 use darqual_tor::relay::{
-    decode_request, decode_response, encode_request, encode_response, RelayRequest, RelayResponse,
+    decode_request, decode_response, encode_ledger_response_bounded, encode_request,
+    encode_response, RelayRequest, RelayResponse,
 };
 use darqual_tor::{accept_and_reply, accept_one, bootstrap, dial_request, dial_send, host};
 
@@ -219,9 +220,15 @@ fn handle_relay_request(
             Ok(relay) => RelayResponse::Ledger(relay.fetch(since_epoch)),
         },
     };
-    encode_response(&response).unwrap_or_else(|e| {
-        encode_response(&RelayResponse::Rejected(format!("response too large: {e}")))
-            .expect("small rejection response must encode")
+    match &response {
+        RelayResponse::Ledger(blocks) => encode_ledger_response_bounded(blocks.clone()),
+        _ => encode_response(&response),
+    }
+    .unwrap_or_else(|e| {
+        encode_response(&RelayResponse::Rejected(format!(
+            "response encoding failed: {e}"
+        )))
+        .expect("small rejection response must encode")
     })
 }
 
