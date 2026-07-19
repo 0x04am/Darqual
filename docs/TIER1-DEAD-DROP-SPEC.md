@@ -1,7 +1,7 @@
 # Tier-1 Dead-Drop MVP — Specification
 
-**Status:** autonomous overnight implementation contract  
-**Branch:** `feat/tier1-dead-drop-mvp`  
+**Status:** autonomous overnight implementation contract
+**Branch:** `feat/tier1-dead-drop-mvp`
 **Scope:** single-relay, async, store-and-forward messaging over Tor. This closes the direct peer-to-peer routing gap for the MVP; it does **not** claim global-observer resistance.
 
 ## Assumptions

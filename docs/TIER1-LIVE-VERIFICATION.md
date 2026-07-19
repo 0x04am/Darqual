@@ -1,8 +1,8 @@
 # Tier-1 Dead-Drop MVP — Live Verification
 
-Date: 2026-07-19  
-Branch: `feat/tier1-dead-drop-mvp`  
-Hosts: relay on **avante**, sender/receiver on **jade**  
+Date: 2026-07-19
+Branch: `feat/tier1-dead-drop-mvp`
+Hosts: relay on **avante**, sender/receiver on **jade**
 Transport: live Tor v3 onion service (Arti), no clearnet listener
 
 ## Scenario
