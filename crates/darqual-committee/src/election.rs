@@ -8,6 +8,9 @@
 //! - **Rotation**: the seed is derived from the ledger tip (`seed_for_epoch`), so the
 //!   committee changes as the chain progresses.
 
+use std::collections::HashSet;
+
+use crate::error::CommitteeError;
 use crate::vrf::vrf_verify;
 
 /// A candidate presenting their VRF claim for a given epoch seed.
@@ -61,6 +64,38 @@ pub fn elect(candidates: &[Candidate], seed: &[u8], committee_size: usize) -> Ve
         .collect()
 }
 
+/// Checked election for protocol consumers.
+///
+/// Invalid proofs are discarded, duplicate public keys can occupy only one
+/// seat, and ties are broken by public key so candidate insertion order cannot
+/// affect the result. Fails closed if there are too few valid unique keys.
+pub fn elect_checked(
+    candidates: &[Candidate],
+    seed: &[u8],
+    committee_size: usize,
+) -> Result<Vec<[u8; 32]>, CommitteeError> {
+    let mut seen = HashSet::with_capacity(candidates.len());
+    let mut valid: Vec<&Candidate> = candidates
+        .iter()
+        .filter(|candidate| {
+            vrf_verify(&candidate.ed_pub, seed, &candidate.output, &candidate.proof)
+        })
+        .filter(|candidate| seen.insert(candidate.ed_pub))
+        .collect();
+    valid.sort_by_key(|candidate| (candidate.output, candidate.ed_pub));
+    if valid.len() < committee_size {
+        return Err(CommitteeError::NotEnoughCandidates {
+            requested: committee_size,
+            available: valid.len(),
+        });
+    }
+    Ok(valid
+        .into_iter()
+        .take(committee_size)
+        .map(|candidate| candidate.ed_pub)
+        .collect())
+}
+
 /// Check whether `ed_pub` is a member of an elected `committee`.
 pub fn is_member(committee: &[[u8; 32]], ed_pub: &[u8; 32]) -> bool {
     committee.contains(ed_pub)
@@ -87,6 +122,49 @@ mod tests {
         let ids: Vec<Identity> = (0..n).map(|_| Identity::generate()).collect();
         let candidates = ids.iter().map(|id| make_candidate(id, seed)).collect();
         (ids, candidates)
+    }
+
+    #[test]
+    fn checked_election_is_invariant_to_candidate_permutation() {
+        let seed = b"permutation-seed";
+        let (_ids, candidates) = make_candidates(8, seed);
+        let mut reversed = candidates.clone();
+        reversed.reverse();
+
+        assert_eq!(
+            elect_checked(&candidates, seed, 4).expect("committee"),
+            elect_checked(&reversed, seed, 4).expect("committee")
+        );
+    }
+
+    #[test]
+    fn duplicate_public_key_cannot_occupy_multiple_seats() {
+        let seed = b"duplicate-key-seed";
+        let (ids, mut candidates) = make_candidates(4, seed);
+        candidates.push(make_candidate(&ids[0], seed));
+
+        let committee = elect_checked(&candidates, seed, 4).expect("committee");
+
+        assert_eq!(committee.len(), 4);
+        let unique: std::collections::HashSet<_> = committee.iter().collect();
+        assert_eq!(unique.len(), committee.len());
+    }
+
+    #[test]
+    fn checked_election_fails_if_valid_unique_candidates_are_insufficient() {
+        let seed = b"insufficient-seed";
+        let (_ids, mut candidates) = make_candidates(3, seed);
+        candidates[0].proof[0] ^= 0xff;
+
+        let err = elect_checked(&candidates, seed, 3).expect_err("must fail closed");
+
+        assert!(matches!(
+            err,
+            crate::CommitteeError::NotEnoughCandidates {
+                requested: 3,
+                available: 2
+            }
+        ));
     }
 
     // ── election determinism ──────────────────────────────────────────────────
