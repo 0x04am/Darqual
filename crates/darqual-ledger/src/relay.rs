@@ -1,0 +1,327 @@
+//! Transport-neutral state machine for the Tier-1 single-relay dead drop.
+
+use std::fs;
+use std::io::Write;
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+use crate::{Block, Epoch, LedgerEntry};
+
+const SNAPSHOT_VERSION: u8 = 1;
+const MAX_WINDOW: usize = 4096;
+
+#[derive(Debug, Error)]
+pub enum RelayError {
+    #[error("relay hot window must be between 1 and {MAX_WINDOW} blocks")]
+    InvalidWindow,
+    #[error("entry fails PoW at difficulty {0}")]
+    InvalidPoW(u32),
+    #[error("relay epoch moved backward from {current} to {got}")]
+    EpochRegression { current: Epoch, got: Epoch },
+    #[error("relay snapshot I/O failed: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("relay snapshot decode failed: {0}")]
+    Decode(String),
+    #[error("relay snapshot is internally invalid: {0}")]
+    InvalidSnapshot(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RelayReceipt {
+    pub epoch: Epoch,
+    pub entries: u32,
+}
+
+/// One designated relay's bounded hot window plus its current in-progress epoch.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelayState {
+    version: u8,
+    window: usize,
+    pow_difficulty: u32,
+    committed: Vec<Block>,
+    current_epoch: Option<Epoch>,
+    current_entries: Vec<LedgerEntry>,
+}
+
+impl RelayState {
+    pub fn new(window: usize, pow_difficulty: u32) -> Result<Self, RelayError> {
+        if !(1..=MAX_WINDOW).contains(&window) {
+            return Err(RelayError::InvalidWindow);
+        }
+        Ok(Self {
+            version: SNAPSHOT_VERSION,
+            window,
+            pow_difficulty,
+            committed: Vec::new(),
+            current_epoch: None,
+            current_entries: Vec::new(),
+        })
+    }
+
+    pub fn submit(
+        &mut self,
+        now_epoch: Epoch,
+        entry: LedgerEntry,
+    ) -> Result<RelayReceipt, RelayError> {
+        if !entry.pow_valid(self.pow_difficulty) {
+            return Err(RelayError::InvalidPoW(self.pow_difficulty));
+        }
+        self.rotate_to(now_epoch)?;
+        self.current_entries.push(entry);
+        Ok(RelayReceipt {
+            epoch: now_epoch,
+            entries: self.current_entries.len() as u32,
+        })
+    }
+
+    /// Return committed blocks plus a snapshot of the current in-progress epoch.
+    pub fn fetch(&self, since_epoch: Option<Epoch>) -> Vec<Block> {
+        let mut blocks: Vec<Block> = self
+            .committed
+            .iter()
+            .filter(|block| since_epoch.is_none_or(|since| block.header.epoch >= since))
+            .cloned()
+            .collect();
+        if let Some(epoch) = self.current_epoch {
+            if !self.current_entries.is_empty() && since_epoch.is_none_or(|since| epoch >= since) {
+                blocks.push(Block::new(
+                    epoch,
+                    self.tip_hash(),
+                    self.current_entries.clone(),
+                ));
+            }
+        }
+        blocks
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), RelayError> {
+        let parent = path.parent().unwrap_or_else(|| Path::new("."));
+        fs::create_dir_all(parent)?;
+        let bytes = bincode::serialize(self).map_err(|e| RelayError::Decode(e.to_string()))?;
+        let tmp = parent.join(format!(
+            ".{}.{}.tmp",
+            path.file_name().and_then(|n| n.to_str()).unwrap_or("relay"),
+            std::process::id()
+        ));
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
+        if let Err(err) = (|| -> std::io::Result<()> {
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+            fs::rename(&tmp, path)?;
+            Ok(())
+        })() {
+            let _ = fs::remove_file(&tmp);
+            return Err(RelayError::Io(err));
+        }
+        Ok(())
+    }
+
+    pub fn load(path: &Path) -> Result<Self, RelayError> {
+        let bytes = fs::read(path)?;
+        let state: Self =
+            bincode::deserialize(&bytes).map_err(|e| RelayError::Decode(e.to_string()))?;
+        state.validate()?;
+        Ok(state)
+    }
+
+    pub fn window(&self) -> usize {
+        self.window
+    }
+
+    pub fn pow_difficulty(&self) -> u32 {
+        self.pow_difficulty
+    }
+
+    fn rotate_to(&mut self, epoch: Epoch) -> Result<(), RelayError> {
+        match self.current_epoch {
+            None => self.current_epoch = Some(epoch),
+            Some(current) if epoch < current => {
+                return Err(RelayError::EpochRegression {
+                    current,
+                    got: epoch,
+                });
+            }
+            Some(current) if epoch > current => {
+                if !self.current_entries.is_empty() {
+                    let block = Block::new(
+                        current,
+                        self.tip_hash(),
+                        std::mem::take(&mut self.current_entries),
+                    );
+                    self.committed.push(block);
+                    self.prune();
+                }
+                self.current_epoch = Some(epoch);
+            }
+            Some(_) => {}
+        }
+        Ok(())
+    }
+
+    fn tip_hash(&self) -> [u8; 32] {
+        self.committed.last().map_or([0u8; 32], Block::hash)
+    }
+
+    fn prune(&mut self) {
+        // Reserve one slot for the current in-progress epoch returned by fetch().
+        let committed_limit = self.window.saturating_sub(1);
+        if self.committed.len() > committed_limit {
+            let remove = self.committed.len() - committed_limit;
+            self.committed.drain(..remove);
+            // Re-anchor the retained hot window. It remains internally linked from
+            // the first retained block; history before the hot window is intentionally pruned.
+            if let Some(first) = self.committed.first_mut() {
+                first.header.prev_hash = [0u8; 32];
+            }
+            for idx in 1..self.committed.len() {
+                self.committed[idx].header.prev_hash = self.committed[idx - 1].hash();
+            }
+        }
+    }
+
+    fn validate(&self) -> Result<(), RelayError> {
+        if self.version != SNAPSHOT_VERSION {
+            return Err(RelayError::InvalidSnapshot("unsupported version".into()));
+        }
+        if !(1..=MAX_WINDOW).contains(&self.window) {
+            return Err(RelayError::InvalidWindow);
+        }
+        if self.committed.len() > self.window.saturating_sub(1) {
+            return Err(RelayError::InvalidSnapshot(
+                "hot window exceeds bound".into(),
+            ));
+        }
+        let mut prev = [0u8; 32];
+        for block in &self.committed {
+            if !block.validate() || block.header.prev_hash != prev {
+                return Err(RelayError::InvalidSnapshot(
+                    "invalid block or chain link".into(),
+                ));
+            }
+            if !block.validate_pow(self.pow_difficulty) {
+                return Err(RelayError::InvalidSnapshot("invalid entry PoW".into()));
+            }
+            prev = block.hash();
+        }
+        if self
+            .current_entries
+            .iter()
+            .any(|entry| !entry.pow_valid(self.pow_difficulty))
+        {
+            return Err(RelayError::InvalidSnapshot("invalid pending PoW".into()));
+        }
+        if self.current_entries.is_empty() != self.current_epoch.is_none()
+            && self.current_epoch.is_none()
+        {
+            return Err(RelayError::InvalidSnapshot(
+                "pending entries have no epoch".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use darqual_core::{Identity, Label, Lockbox};
+    use x25519_dalek::PublicKey as X25519PublicKey;
+
+    use super::*;
+
+    fn entry_for(recipient: &Identity, label_byte: u8, msg: &[u8], difficulty: u32) -> LedgerEntry {
+        let x_pub = X25519PublicKey::from(&recipient.x_secret);
+        let lockbox = Lockbox::seal(&x_pub, msg).expect("seal");
+        LedgerEntry::mint(
+            Label([label_byte; 16]),
+            lockbox.envelope.into_bytes(),
+            difficulty,
+        )
+    }
+
+    #[test]
+    fn submit_is_immediately_visible_in_current_epoch_snapshot() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        let receipt = relay
+            .submit(10, entry_for(&bob, 7, b"offline hello", 0))
+            .expect("submit");
+        let blocks = relay.fetch(None);
+        assert_eq!(
+            receipt,
+            RelayReceipt {
+                epoch: 10,
+                entries: 1
+            }
+        );
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].header.epoch, 10);
+        assert_eq!(blocks[0].entries.len(), 1);
+    }
+
+    #[test]
+    fn invalid_pow_does_not_mutate_state() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(4, 12).expect("relay");
+        let mut bad = entry_for(&bob, 1, b"cheap write", 0);
+        while bad.pow_valid(12) {
+            bad.nonce = bad.nonce.wrapping_add(1);
+        }
+        let err = relay.submit(10, bad).expect_err("must reject bad PoW");
+        assert!(matches!(err, RelayError::InvalidPoW(12)));
+        assert!(relay.fetch(None).is_empty());
+    }
+
+    #[test]
+    fn epoch_rotation_commits_a_hash_linked_block() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        relay
+            .submit(10, entry_for(&bob, 1, b"one", 0))
+            .expect("one");
+        relay
+            .submit(11, entry_for(&bob, 2, b"two", 0))
+            .expect("two");
+        let blocks = relay.fetch(None);
+        assert_eq!(blocks.len(), 2);
+        assert_eq!(blocks[1].header.prev_hash, blocks[0].hash());
+    }
+
+    #[test]
+    fn atomic_snapshot_round_trip_preserves_pruned_hot_window_and_pending() {
+        let bob = Identity::generate();
+        let mut relay = RelayState::new(2, 0).expect("relay");
+        for epoch in 10..14 {
+            relay
+                .submit(epoch, entry_for(&bob, epoch as u8, &[epoch as u8], 0))
+                .expect("submit");
+        }
+        let dir = std::env::temp_dir().join(format!("darqual-relay-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+        relay.save(&path).expect("save");
+        let restored = RelayState::load(&path).expect("load");
+        assert_eq!(restored.fetch(None), relay.fetch(None));
+        assert_eq!(restored.window(), 2);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn malformed_snapshot_is_rejected() {
+        let dir = std::env::temp_dir().join(format!("darqual-relay-bad-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+        fs::write(&path, b"not a relay snapshot").expect("write");
+        let err = RelayState::load(&path).expect_err("malformed snapshot must fail");
+        assert!(matches!(err, RelayError::Decode(_)));
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+}
