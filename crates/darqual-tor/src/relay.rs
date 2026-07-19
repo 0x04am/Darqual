@@ -2,12 +2,12 @@
 
 use anyhow::Context;
 use bincode::Options;
-use darqual_ledger::{Block, Epoch, LedgerEntry};
+use darqual_ledger::{Block, Epoch, LedgerEntry, MAX_RELAY_ENVELOPE_BYTES};
 use serde::{Deserialize, Serialize};
 
 /// Hard ceiling below the transport's 16 MiB frame cap.
 pub const MAX_RELAY_PAYLOAD: usize = 8 * 1024 * 1024;
-pub const MAX_ENTRY_ENVELOPE: usize = 256 * 1024;
+pub const MAX_ENTRY_ENVELOPE: usize = MAX_RELAY_ENVELOPE_BYTES;
 pub const MAX_FETCH_BLOCKS: usize = 4096;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

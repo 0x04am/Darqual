@@ -70,13 +70,26 @@ pub struct Block {
 impl Block {
     /// Construct a block, computing the Merkle root and n_messages automatically.
     pub fn new(epoch: Epoch, prev_hash: [u8; 32], entries: Vec<LedgerEntry>) -> Self {
-        let leaves: Vec<Vec<u8>> = entries.iter().map(|e| e.canonical_bytes()).collect();
-        let root = merkle::merkle_root(&leaves);
-        let n = entries.len() as u32;
         let created_unix = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+        Self::new_at(epoch, prev_hash, entries, created_unix)
+    }
+
+    /// Construct a block with an explicit creation timestamp.
+    ///
+    /// Relays use the epoch boundary here so repeated snapshots of an in-progress
+    /// epoch have a stable hash instead of changing with wall-clock time.
+    pub fn new_at(
+        epoch: Epoch,
+        prev_hash: [u8; 32],
+        entries: Vec<LedgerEntry>,
+        created_unix: u64,
+    ) -> Self {
+        let leaves: Vec<Vec<u8>> = entries.iter().map(|e| e.canonical_bytes()).collect();
+        let root = merkle::merkle_root(&leaves);
+        let n = entries.len() as u32;
 
         Block {
             header: BlockHeader {

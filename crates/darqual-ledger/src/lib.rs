@@ -13,7 +13,9 @@ pub use epoch::{epoch_at, epoch_now, Epoch, EPOCH_SECONDS};
 pub use ledger::{Ledger, LedgerError};
 pub use merkle::{merkle_proof, merkle_root, verify_proof, MerkleProof, EMPTY_ROOT};
 pub use notify::{fetch_open, notify};
-pub use relay::{RelayError, RelayReceipt, RelayState};
+pub use relay::{
+    RelayError, RelayReceipt, RelayState, MAX_RELAY_ENVELOPE_BYTES, MAX_RELAY_STATE_BYTES,
+};
 pub use sweep::{sweep_window, trial_decrypt};
 
 #[cfg(test)]
