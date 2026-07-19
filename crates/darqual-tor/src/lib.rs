@@ -94,6 +94,52 @@ pub async fn accept_one(host: &mut Host, port: u16) -> anyhow::Result<Option<Vec
     Ok(None)
 }
 
+/// Accept the next inbound request, pass its frame to `handler`, and send the
+/// returned response on the same onion stream. Returns `None` if the request
+/// stream ends.
+pub async fn accept_and_reply<F>(
+    host: &mut Host,
+    port: u16,
+    handler: F,
+) -> anyhow::Result<Option<()>>
+where
+    F: FnOnce(Vec<u8>) -> Vec<u8>,
+{
+    while let Some(req) = host.streams.next().await {
+        match req.request() {
+            IncomingStreamRequest::Begin(b) if b.port() == port => {
+                let mut ds = req.accept(Connected::new_empty()).await?;
+                let frame = read_frame(&mut ds).await?;
+                let response = handler(frame);
+                write_frame(&mut ds, &response).await?;
+                ds.flush().await?;
+                ds.close().await.ok();
+                return Ok(Some(()));
+            }
+            _ => {
+                let _ = req.reject(End::new_misc()).await;
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Dial a relay onion, send one framed request, then read one framed response.
+pub async fn dial_request(
+    client: &Client,
+    onion: &str,
+    port: u16,
+    data: &[u8],
+) -> anyhow::Result<Vec<u8>> {
+    let addr = format!("{onion}:{port}");
+    let mut stream = client.connect(addr).await.context("connect onion")?;
+    write_frame(&mut stream, data).await?;
+    stream.flush().await?;
+    let response = read_frame(&mut stream).await?;
+    stream.close().await.ok();
+    Ok(response)
+}
+
 /// Dial a peer's `.onion` address and send one framed message.
 pub async fn dial_send(client: &Client, onion: &str, port: u16, data: &[u8]) -> anyhow::Result<()> {
     let addr = format!("{onion}:{port}");

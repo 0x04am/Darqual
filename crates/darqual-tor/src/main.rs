@@ -26,10 +26,17 @@
 //! unlinkable (fresh ephemeral each time). No back-compat with pre-F-2 nodes
 //! (flag-day acceptable; pre-release software).
 
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use darqual_core::{ContactCard, Identity, Lockbox, RatchetMessage, SessionStore};
-use darqual_tor::{accept_one, bootstrap, dial_send, host};
+use darqual_core::{ContactCard, Conversation, Identity, Lockbox, RatchetMessage, SessionStore};
+use darqual_ledger::{epoch_now, fetch_open, LedgerEntry, RelayState};
+use darqual_tor::relay::{
+    decode_request, decode_response, encode_request, encode_response, RelayRequest, RelayResponse,
+};
+use darqual_tor::{accept_and_reply, accept_one, bootstrap, dial_request, dial_send, host};
 
 /// Frame version byte: lockbox-v2-wrapped RatchetMessage (first-contact bootstrap).
 const FRAME_BOOTSTRAP: u8 = 0x01;
@@ -55,6 +62,43 @@ enum Cmd {
         #[arg(long, default_value_t = 9999)]
         port: u16,
     },
+    /// Host a Tier-1 single-relay async dead-drop ledger over Tor.
+    Relay {
+        #[arg(long, default_value = "darqualrelay")]
+        nickname: String,
+        #[arg(long, default_value_t = 9999)]
+        port: u16,
+        #[arg(long)]
+        state: PathBuf,
+        #[arg(long, default_value_t = 60)]
+        window: usize,
+        #[arg(long, default_value_t = 12)]
+        pow_difficulty: u32,
+    },
+    /// Submit an encrypted dead-drop to a relay; never dials the recipient.
+    DropSend {
+        #[arg(long)]
+        relay: String,
+        #[arg(long)]
+        to: String,
+        #[arg(long)]
+        message: String,
+        #[arg(long, default_value_t = 9999)]
+        port: u16,
+        #[arg(long, default_value_t = 12)]
+        pow_difficulty: u32,
+    },
+    /// Fetch public relay blocks and open dead-drops for one known sender.
+    DropFetch {
+        #[arg(long)]
+        relay: String,
+        #[arg(long)]
+        from: String,
+        #[arg(long, default_value_t = 9999)]
+        port: u16,
+        #[arg(long)]
+        since_epoch: Option<u64>,
+    },
     /// Encrypt a message under a ratchet session and send it to a peer's `.onion`.
     Send {
         /// Peer onion address (e.g. abcd...xyz.onion)
@@ -74,6 +118,26 @@ enum Cmd {
 async fn main() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Host { nickname, port } => host_cmd(&nickname, port).await,
+        Cmd::Relay {
+            nickname,
+            port,
+            state,
+            window,
+            pow_difficulty,
+        } => relay_cmd(&nickname, port, &state, window, pow_difficulty).await,
+        Cmd::DropSend {
+            relay,
+            to,
+            message,
+            port,
+            pow_difficulty,
+        } => drop_send_cmd(&relay, &to, &message, port, pow_difficulty).await,
+        Cmd::DropFetch {
+            relay,
+            from,
+            port,
+            since_epoch,
+        } => drop_fetch_cmd(&relay, &from, port, since_epoch).await,
         Cmd::Send {
             onion,
             to,
@@ -81,6 +145,154 @@ async fn main() -> Result<()> {
             port,
         } => send_cmd(&onion, &to, &message, port).await,
     }
+}
+
+async fn relay_cmd(
+    nickname: &str,
+    port: u16,
+    state_path: &Path,
+    window: usize,
+    pow_difficulty: u32,
+) -> Result<()> {
+    let state = if state_path.exists() {
+        RelayState::load(state_path).context("load relay state")?
+    } else {
+        RelayState::new(window, pow_difficulty).context("create relay state")?
+    };
+    anyhow::ensure!(
+        state.window() == window && state.pow_difficulty() == pow_difficulty,
+        "saved relay configuration differs from --window/--pow-difficulty"
+    );
+    let state = Arc::new(Mutex::new(state));
+
+    println!("[relay] bootstrapping onto the Tor network…");
+    let client = bootstrap().await.context("bootstrap")?;
+    let mut h = host(&client, nickname, port).context("launch relay onion service")?;
+    println!("[relay] onion service: {}", h.onion);
+    println!("[relay] state: {}", state_path.display());
+    println!("[relay] Tier-1 single relay — NOT global-observer resistant");
+
+    loop {
+        let state = Arc::clone(&state);
+        let path = state_path.to_path_buf();
+        match accept_and_reply(&mut h, port, move |frame| {
+            handle_relay_request(&state, &path, &frame)
+        })
+        .await
+        {
+            Ok(Some(())) => {}
+            Ok(None) => break,
+            Err(e) => eprintln!("[relay] request error: {e}"),
+        }
+    }
+    Ok(())
+}
+
+fn handle_relay_request(
+    state: &Arc<Mutex<RelayState>>,
+    state_path: &Path,
+    frame: &[u8],
+) -> Vec<u8> {
+    let response = match decode_request(frame) {
+        Err(e) => RelayResponse::Rejected(format!("invalid request: {e}")),
+        Ok(RelayRequest::Submit(entry)) => match state.lock() {
+            Err(_) => RelayResponse::Rejected("relay state lock poisoned".into()),
+            Ok(mut relay) => {
+                let mut candidate = relay.clone();
+                match candidate.submit(epoch_now(), entry) {
+                    Err(e) => RelayResponse::Rejected(e.to_string()),
+                    Ok(receipt) => match candidate.save(state_path) {
+                        Ok(()) => {
+                            *relay = candidate;
+                            RelayResponse::Accepted {
+                                epoch: receipt.epoch,
+                                entries: receipt.entries,
+                            }
+                        }
+                        Err(e) => RelayResponse::Rejected(format!("persistence failed: {e}")),
+                    },
+                }
+            }
+        },
+        Ok(RelayRequest::Fetch { since_epoch }) => match state.lock() {
+            Err(_) => RelayResponse::Rejected("relay state lock poisoned".into()),
+            Ok(relay) => RelayResponse::Ledger(relay.fetch(since_epoch)),
+        },
+    };
+    encode_response(&response).unwrap_or_else(|e| {
+        encode_response(&RelayResponse::Rejected(format!("response too large: {e}")))
+            .expect("small rejection response must encode")
+    })
+}
+
+async fn relay_round_trip(
+    relay: &str,
+    port: u16,
+    request: &RelayRequest,
+) -> Result<RelayResponse> {
+    println!("[tor] bootstrapping onto the Tor network…");
+    let client = bootstrap().await.context("bootstrap")?;
+    let request = encode_request(request).context("encode relay request")?;
+    let response = dial_request(&client, relay, port, &request)
+        .await
+        .context("relay request")?;
+    decode_response(&response).context("decode relay response")
+}
+
+async fn drop_send_cmd(
+    relay: &str,
+    to: &str,
+    message: &str,
+    port: u16,
+    pow_difficulty: u32,
+) -> Result<()> {
+    let card = to.parse::<ContactCard>().context("invalid contact card")?;
+    let id_path = Identity::default_path().context("could not determine identity path")?;
+    let identity =
+        Identity::load(&id_path).context("failed to load identity — run `darqual keygen` first")?;
+    let epoch = epoch_now();
+    let conv = Conversation::new(&identity, &card);
+    let (label, envelope) = conv
+        .seal(&card, epoch, message.as_bytes())
+        .context("seal dead-drop")?;
+    let entry = LedgerEntry::mint(label, envelope, pow_difficulty);
+
+    match relay_round_trip(relay, port, &RelayRequest::Submit(entry)).await? {
+        RelayResponse::Accepted { epoch, entries } => {
+            println!("[drop-sent] relay={relay} epoch={epoch} entries={entries}");
+            Ok(())
+        }
+        RelayResponse::Rejected(reason) => anyhow::bail!("relay rejected write: {reason}"),
+        RelayResponse::Ledger(_) => anyhow::bail!("relay returned an unexpected ledger response"),
+    }
+}
+
+async fn drop_fetch_cmd(
+    relay: &str,
+    from: &str,
+    port: u16,
+    since_epoch: Option<u64>,
+) -> Result<()> {
+    let sender = from.parse::<ContactCard>().context("invalid contact card")?;
+    let id_path = Identity::default_path().context("could not determine identity path")?;
+    let identity =
+        Identity::load(&id_path).context("failed to load identity — run `darqual keygen` first")?;
+    let blocks = match relay_round_trip(relay, port, &RelayRequest::Fetch { since_epoch }).await? {
+        RelayResponse::Ledger(blocks) => blocks,
+        RelayResponse::Rejected(reason) => anyhow::bail!("relay rejected fetch: {reason}"),
+        RelayResponse::Accepted { .. } => anyhow::bail!("relay returned an unexpected receipt"),
+    };
+
+    let conv = Conversation::new(&identity, &sender);
+    let mut found = 0usize;
+    for block in &blocks {
+        for message in fetch_open(&conv, block.header.epoch, block, &identity) {
+            println!("[drop-recv] {}", String::from_utf8_lossy(&message));
+            found += 1;
+        }
+    }
+    println!("[drop-fetch] relay={relay} blocks={} messages={found}", blocks.len());
+    Ok(())
 }
 
 async fn host_cmd(nickname: &str, port: u16) -> Result<()> {
@@ -273,4 +485,39 @@ async fn send_cmd(onion: &str, to: &str, message: &str, port: u16) -> Result<()>
         .context("dial/send")?;
     println!("[sent] {} bytes to {}", frame.len(), onion);
     Ok(())
+}
+
+#[cfg(test)]
+mod tier1_tests {
+    use std::fs;
+
+    use darqual_core::{Identity, Label};
+
+    use super::*;
+
+    fn entry_for(recipient: &Identity, message: &[u8]) -> LedgerEntry {
+        let lockbox = Lockbox::seal_to_card(&recipient.contact_card(), message).expect("seal");
+        LedgerEntry::mint(Label([3; 16]), lockbox.envelope.into_bytes(), 0)
+    }
+
+    #[test]
+    fn persistence_failure_does_not_accept_or_mutate_relay_state() {
+        let bob = Identity::generate();
+        let state = Arc::new(Mutex::new(RelayState::new(4, 0).expect("state")));
+        let dir = std::env::temp_dir().join(format!("darqual-relay-dir-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        // Renaming an atomic temp file over a directory must fail.
+        let response = handle_relay_request(
+            &state,
+            &dir,
+            &encode_request(&RelayRequest::Submit(entry_for(&bob, b"must roll back")))
+                .expect("encode"),
+        );
+        let response = decode_response(&response).expect("decode");
+
+        assert!(matches!(response, RelayResponse::Rejected(_)));
+        assert!(state.lock().expect("lock").fetch(None).is_empty());
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
 }
