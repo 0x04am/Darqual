@@ -20,17 +20,14 @@ Full architecture rationale + the 7-paper synthesis live in
 - **Is (by design — the target, not yet the delivered state):** a serverless, metadata-resistant
   comms network where messages are per-recipient encrypted "lockboxes," sends and receives are
   both unlinkable, and the question *"who is talking to whom?"* is unanswerable to a global observer.
-- **⚠️ STATUS (do not misread the above as delivered):** as of S222 the running node delivers
-  **content** anonymity (deniable auth, FS/PCS, encrypted headers) over Tor, but **sends/receives
-  are NOT yet unlinkable in practice** — the node still does a *direct onion dial* and the dead-drop
-  / cover-traffic layer that would hide who-talks-to-whom is built as libraries but **not wired in**.
-  - **Tier-1 update (2026-07-19):** the branch `feat/tier1-dead-drop-mvp` now offers an
-    explicit single-relay async mode: both parties dial only a persistent relay onion via
-    `drop-send` / `drop-fetch`. This closes the direct peer-dial requirement for the MVP and
-    works while the recipient is offline. It does **not** deliver the full design target:
-    a single relay still exposes write/read timing, and DPF/PIR/mandatory cover/multi-relay
-    anytrust are not wired. Contact-graph privacy against a global observer remains a target.
-  Contact-graph privacy is **design intent, not a current guarantee.** See THREAT-MODEL.md gap #1.
+- **⚠️ STATUS (do not misread the above as delivered):** Darqual has two running paths.
+  Direct mode delivers deniable auth, FS/PCS, and encrypted headers over a peer-to-peer Tor dial.
+  Tier-1 dead-drop mode is asynchronous through one persistent relay onion: both parties dial only
+  the relay and the recipient may be offline. Tier-1 closes the direct peer-dial requirement for
+  the MVP, but it does **not** deliver the full design target: one relay still exposes write/read
+  timing, labels are static per epoch rather than keywheel-persisted, and DPF/PIR/mandatory
+  cover/multi-relay anytrust are not wired. Contact-graph privacy against a global observer remains
+  **design intent, not a current guarantee.** See THREAT-MODEL.md gap #1.
 - **Is not:** a real-time WhatsApp clone. Darqual is **async by nature** (the latency *is* the
   anonymity — Anonymity Trilemma, Das et al. S&P'18). Think: *email even a nation-state can't
   social-graph,* with an opt-in real-time channel for two online peers who accept the tradeoff.
@@ -71,20 +68,19 @@ and no amount of crypto on the wire fixes them:
 | Property | Guarantee | Status |
 |---|---|---|
 | Content confidentiality | E2E AEAD; only the recipient can read | ✅ wired |
-| Recipient anonymity | observer can't tell who a lockbox is for | 🟡 lib only (not in node) |
+| Recipient anonymity | observer cannot identify the recipient inside a fetched relay block | 🟡 Tier-1 wired; relay access timing still visible |
 | Sender anonymity (to network) | observer can't tell who sent it | ✅ wired |
-| Sender authentication (deniable) | recipient knows it's you; can't prove it to a third party (Noise IK, S222) | ✅ wired |
-| Contact-graph privacy | who-talks-to-whom is hidden | 🟡 **lib only — node still direct-dials** |
+| Sender authentication (deniable) | recipient knows it's you; can't prove it to a third party (Noise IK, S222) | ✅ direct mode; Tier-1 uses static anonymous lockboxes |
+| Contact-graph privacy | who-talks-to-whom is hidden | 🟡 Tier-1 breaks direct peer dial; global-observer goal not delivered |
 | Integrity / tamper-evidence | AEAD + Merkle-linked ledger | ✅ wired |
 | Forward secrecy + post-compromise | per-msg message keys + DH ratchet self-heal (Double Ratchet, S222) | ✅ wired |
 | Header / metadata privacy | ratchet headers encrypted — no linkable pubkeys/counters on the wire (S222) | ✅ wired |
 | Sybil/spam resistance | anonymous rate-limiting (PoW now; RLN research), no payment graph | 🟡 lib only |
 | Availability under churn | erasure coding + data-availability sampling | 🟡 lib only |
 
-> **Goal ≠ delivered.** ✅ = live in the running node today. 🟡 = built + tested as a library but
-> **not yet wired into the node's send/receive path** (so it does NOT yet protect a user). The
-> headline "contact-graph privacy" is 🟡 — see THREAT-MODEL.md gap #1. Treat 🟡 rows as design
-> intent, not guarantees.
+> **Goal ≠ delivered.** ✅ means implemented and live in the stated mode. 🟡 means a narrower
+> path exists but the mission-level guarantee is not established. In particular, Tier-1 is a
+> single-relay store-and-forward MVP, not global-observer contact-graph privacy.
 
 **Non-goal (v0):** defeating a *global active* adversary that corrupts an entire epoch
 committee. We make it economically/cryptographically hard, not impossible.

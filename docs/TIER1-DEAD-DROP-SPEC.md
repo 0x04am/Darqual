@@ -1,6 +1,6 @@
 # Tier-1 Dead-Drop MVP — Specification
 
-**Status:** autonomous overnight implementation contract
+**Status:** implemented on `feat/tier1-dead-drop-mvp`; hardened and deterministically tested on Avante
 **Branch:** `feat/tier1-dead-drop-mvp`
 **Scope:** single-relay, async, store-and-forward messaging over Tor. This closes the direct peer-to-peer routing gap for the MVP; it does **not** claim global-observer resistance.
 
@@ -12,7 +12,7 @@
 4. Existing `Conversation` labels and lockboxes are the compatibility foundation. The first vertical slice uses static per-epoch labels; forward-secret keywheel persistence is a follow-up after the async path is proven.
 5. Epoch duration remains the existing 60 seconds. The relay may expose an in-progress current-epoch snapshot so messages need not wait a full epoch.
 6. Existing direct `host`/`send` commands remain available and are explicitly identified as direct mode.
-7. No push. Commits remain local on this feature branch.
+7. Push only reviewed, green, independently revertible commits to this feature branch. Do not merge to `main` without a separate integration review.
 
 ## Objective
 
@@ -109,7 +109,7 @@ TDD, in this order:
 - Make local commits after each green vertical slice.
 
 ### Never
-- Push or merge.
+- Merge or force-push without a separate integration review.
 - Claim global passive observer resistance.
 - Implement committee consensus, RLN/DPF, PIR, or full cover-traffic scheduling in Tier 1.
 - Store plaintext messages at relay.

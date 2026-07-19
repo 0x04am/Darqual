@@ -3,7 +3,7 @@
 Honest, evidence-based status. Updated as Jawz builds. Three buckets:
 **✅ DONE+TESTED** · **🟡 SCAFFOLDED** · **🔬 OPEN-RESEARCH** (cannot be "finished" overnight by anyone).
 
-Last update: S222 (2026-06-26) — content-crypto layer + live Tor transport + session wiring.
+Last update: 2026-07-19 — Tier-1 single-relay async path + nightly hardening.
 
 ---
 
@@ -13,8 +13,11 @@ The direct-dial gap now has a working **single-relay async path** on branch
 `feat/tier1-dead-drop-mvp`. `darqual-tor-node relay` hosts a persistent PoW-gated hot-window
 ledger on a Tor v3 onion; `drop-send` submits labelled lockboxes to that relay; `drop-fetch`
 retrieves public blocks and opens only the recipient's matching label. Alice and Bob never dial
-each other in this mode. A live avante-relay / jade-client test proved offline delivery,
-wrong-recipient rejection, and relay-restart persistence; see `docs/TIER1-LIVE-VERIFICATION.md`.
+each other in this mode. One live avante-relay / jade-client run observed offline delivery,
+wrong-recipient rejection, and relay-restart persistence. Deterministic automated tests now cover
+Alice→relay→Bob, Eve rejection, sender exit, restart persistence, plaintext absence, malformed
+request recovery, replay rejection, bounded snapshots, and one-epoch clock skew. See
+`docs/TIER1-LIVE-VERIFICATION.md`.
 
 **Scope boundary:** this closes the *application wiring* gap for an async MVP, not the research
 mission. One relay still observes write/read timing; there is no DPF private write, PIR private
@@ -25,7 +28,7 @@ Commands:
 
 ```bash
 # Relay
-+darqual-tor-node relay --state ~/.darqual/relay-ledger.bin --window 60 --pow-difficulty 12
+darqual-tor-node relay --state ~/.darqual/relay-ledger.bin --window 60 --pow-difficulty 12
 
 # Alice (only the relay onion is supplied; there is no Bob onion argument)
 darqual-tor-node drop-send --relay <relay>.onion --to dqcard1... --message "hello"
@@ -124,10 +127,10 @@ as far as it verifiably holds together — truth over theater.
   resistant set. (Tor/Arti transport swap and content forward-secrecy/Double-Ratchet were on
   this list at S218 — both DONE at S222.) See THREAT-MODEL.md for the complete honest accounting.
 - RESUME POINTS (highest value first): (1) **simultaneous-initiate race** — two peers sending
-  first at once diverge; needs session-IDs / X3DH prekeys. (2) **wire keywheel/dead-drop ledger
-  into the node** — sessions still ride a direct onion dial (both-online); move to async
-  dead-drops. (3) **encrypt session files at rest** (`~/.darqual/sessions` holds secrets).
-  (4) PIR retrieval. (5) external audit.
+  first at once diverge; needs session-IDs / X3DH prekeys. (2) **harden the Tier-1 dead-drop path**
+  — keywheel persistence, receiver-side chain validation, fetch pagination/rate limits, and
+  repeatable live smoke automation. (3) **encrypt session files at rest**
+  (`~/.darqual/sessions` holds secrets). (4) PIR retrieval. (5) external audit.
 
 ---
 
@@ -160,9 +163,10 @@ HOME=/tmp/a $TORNODE send --onion <bob>.onion --to "$BCARD" --message "over live
 Regression gate (run after ANY change): `./scripts/verify.sh`
 
 ## What's NOT done (honest)
-- Sessions still ride a **direct onion dial (both-online)** — the dead-drop ledger / keywheel
-  labels (Stages 2/3/7, built as libs) are NOT yet wired into the node's send/receive path.
-  This is MVP path §12 step 1+ (Ricochet-level), not the full async anonymity system.
+- The **direct ratcheted mode** still dials a peer onion and requires both peers online. The
+  separate **Tier-1 dead-drop mode** is wired and async through one relay, but uses static
+  per-epoch conversation labels rather than persisted forward-secret keywheel state. One relay
+  still sees write/read timing, and reads/writes are not PIR/DPF-private.
 - **Simultaneous-initiate race** unsolved (needs session-IDs / X3DH prekeys).
 - **Session files not encrypted at rest** (`~/.darqual/sessions`, 0600 but plaintext secrets).
 - Message **length** still observable — fixed-bucket padding not yet enforced at transport.

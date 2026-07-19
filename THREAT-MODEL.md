@@ -52,8 +52,8 @@ observation, not the protection of a *marked individual*. No wire crypto fixes a
 | **Sender auth — deniable** | Noise IK static-static DH; sender id encrypted inside AEAD (S222) | ✅ implemented + tested |
 | **Content forward secrecy + PCS** | Double Ratchet — per-msg keys + DH ratchet self-heal (S222) | ✅ implemented + tested |
 | **Header / metadata privacy** | encrypted ratchet headers — no linkable pubkeys/counters (S222) | ✅ implemented + tested |
-| **Recipient anonymity** | hold-all + trial-decrypt; dead-drop labels; cover traffic (S2/S3/S8) | 🟡 lib built; NOT wired into node path |
-| **Contact-graph privacy** | labels unlinkable to identity; per-epoch rotation (S3) | 🟡 lib built; node still direct-dials |
+| **Recipient anonymity** | hold-all + trial-decrypt; dead-drop labels (S2/S3) | 🟡 Tier-1 wired; relay access timing remains |
+| **Contact-graph privacy** | no direct peer dial in Tier-1; per-epoch labels | 🟡 single-relay MVP, not global-observer privacy |
 | **Integrity / tamper-evidence** | AEAD + blake3 Merkle blocks + hash-linked chain (S0/S2) | ✅ implemented + tested |
 | **Forward-secret metadata** | keywheel hash-ratchet — past labels unrecoverable after seizure (S7) | ✅ implemented + tested |
 | **Spam / Sybil resistance** | Proof-of-Work gate, difficulty-enforced (S4) | ✅ PoW tier; RLN = research |
