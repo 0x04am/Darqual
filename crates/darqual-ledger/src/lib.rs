@@ -177,6 +177,101 @@ mod tests {
     }
 
     #[test]
+    fn alice_submit_bob_fetch_eve_cannot_open_public_blocks() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let eve = Identity::generate();
+        let epoch = 42;
+        let plaintext = b"offline tier1 hello";
+
+        let alice_to_bob = Conversation::new(&alice, &bob.contact_card());
+        let (label, envelope) = alice_to_bob
+            .seal(&bob.contact_card(), epoch, plaintext)
+            .expect("seal");
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        relay
+            .submit(epoch, LedgerEntry::mint(label, envelope, 0))
+            .expect("submit");
+        let blocks = relay.fetch(None);
+
+        let bob_from_alice = Conversation::new(&bob, &alice.contact_card());
+        let bob_messages: Vec<Vec<u8>> = blocks
+            .iter()
+            .flat_map(|block| fetch_open(&bob_from_alice, block.header.epoch, block, &bob))
+            .collect();
+        assert_eq!(bob_messages, vec![plaintext.to_vec()]);
+
+        let eve_from_alice = Conversation::new(&eve, &alice.contact_card());
+        let eve_messages: Vec<Vec<u8>> = blocks
+            .iter()
+            .flat_map(|block| fetch_open(&eve_from_alice, block.header.epoch, block, &eve))
+            .collect();
+        assert!(eve_messages.is_empty());
+    }
+
+    #[test]
+    fn message_survives_sender_exit_and_relay_restart() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let epoch = 77;
+        let plaintext = b"sender is already offline";
+        let dir =
+            std::env::temp_dir().join(format!("darqual-tier1-restart-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+
+        {
+            let alice_to_bob = Conversation::new(&alice, &bob.contact_card());
+            let (label, envelope) = alice_to_bob
+                .seal(&bob.contact_card(), epoch, plaintext)
+                .expect("seal");
+            let mut relay = RelayState::new(4, 0).expect("relay");
+            relay
+                .submit(epoch, LedgerEntry::mint(label, envelope, 0))
+                .expect("submit");
+            relay.save(&path).expect("persist accepted message");
+        }
+
+        let restored = RelayState::load(&path).expect("restart relay");
+        let bob_from_alice = Conversation::new(&bob, &alice.contact_card());
+        let received: Vec<Vec<u8>> = restored
+            .fetch(None)
+            .iter()
+            .flat_map(|block| fetch_open(&bob_from_alice, block.header.epoch, block, &bob))
+            .collect();
+
+        assert_eq!(received, vec![plaintext.to_vec()]);
+        std::fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn relay_snapshot_does_not_contain_plaintext_message_bytes() {
+        let alice = Identity::generate();
+        let bob = Identity::generate();
+        let epoch = 88;
+        let plaintext = b"DARQUAL-PLAINTEXT-SENTINEL-DO-NOT-STORE";
+        let alice_to_bob = Conversation::new(&alice, &bob.contact_card());
+        let (label, envelope) = alice_to_bob
+            .seal(&bob.contact_card(), epoch, plaintext)
+            .expect("seal");
+        let mut relay = RelayState::new(4, 0).expect("relay");
+        relay
+            .submit(epoch, LedgerEntry::mint(label, envelope, 0))
+            .expect("submit");
+        let dir =
+            std::env::temp_dir().join(format!("darqual-tier1-plaintext-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+        relay.save(&path).expect("save");
+
+        let bytes = std::fs::read(&path).expect("read snapshot");
+        assert!(!bytes.windows(plaintext.len()).any(|w| w == plaintext));
+        std::fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
     fn block_empty_has_empty_root() {
         let block = Block::new(0, [0u8; 32], vec![]);
         assert_eq!(block.header.merkle_root, EMPTY_ROOT);
