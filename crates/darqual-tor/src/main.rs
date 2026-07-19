@@ -509,6 +509,51 @@ mod tier1_tests {
     }
 
     #[test]
+    fn accepted_submit_is_fetchable_after_reloading_snapshot() {
+        let bob = Identity::generate();
+        let state = Arc::new(Mutex::new(RelayState::new(4, 0).expect("state")));
+        let dir =
+            std::env::temp_dir().join(format!("darqual-relay-accepted-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+        let encoded = encode_request(&RelayRequest::Submit(entry_for(
+            &bob,
+            b"durable acceptance",
+        )))
+        .expect("encode");
+
+        let response = decode_response(&handle_relay_request(&state, &path, &encoded))
+            .expect("decode response");
+        assert!(matches!(response, RelayResponse::Accepted { .. }));
+
+        drop(state);
+        let restored = RelayState::load(&path).expect("load accepted state");
+        assert_eq!(restored.fetch(None)[0].entries.len(), 1);
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
+    fn malformed_request_is_rejected_then_valid_fetch_succeeds() {
+        let state = Arc::new(Mutex::new(RelayState::new(4, 0).expect("state")));
+        let dir =
+            std::env::temp_dir().join(format!("darqual-relay-malformed-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("mkdir");
+        let path = dir.join("relay.bin");
+
+        let malformed = decode_response(&handle_relay_request(&state, &path, b"not bincode"))
+            .expect("decode rejection");
+        assert!(matches!(malformed, RelayResponse::Rejected(_)));
+
+        let fetch = encode_request(&RelayRequest::Fetch { since_epoch: None }).expect("encode");
+        let after = decode_response(&handle_relay_request(&state, &path, &fetch))
+            .expect("decode valid response");
+        assert_eq!(after, RelayResponse::Ledger(Vec::new()));
+        fs::remove_dir_all(dir).expect("cleanup");
+    }
+
+    #[test]
     fn persistence_failure_does_not_accept_or_mutate_relay_state() {
         let bob = Identity::generate();
         let state = Arc::new(Mutex::new(RelayState::new(4, 0).expect("state")));
