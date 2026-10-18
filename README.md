@@ -1,7 +1,7 @@
-# Darqual v0.0.1
+# Darqual
 
-> Metadata-dark, asynchronous, peer-to-peer anonymous messenger.
-> Cryptographic foundation — no network, no metadata, no bullshit.
+> Research prototype of a metadata-private, asynchronous, peer-to-peer messenger.
+> Signal-grade content crypto over live Tor onion services. Unaudited.
 
 > ## ⚠️ SAFETY — READ BEFORE TRUSTING THIS WITH ANYTHING
 > **Darqual is a RESEARCH PROTOTYPE. It is NOT audited. Do NOT use it to protect a real person.**
@@ -23,11 +23,18 @@ Darqual is an anonymity-research messenger whose *design goal* is to make the qu
 *"who is talking to whom?"* unanswerable to a global passive observer. **This is the target, not a
 delivered guarantee** — see the safety banner above and THREAT-MODEL.md for what actually works today.
 
-**v0.0.1** ships the cryptographic primitives:
-- `Identity` — ed25519 (signing) + x25519 (encryption), stored at `~/.darqual/identity.toml`
-- `DarqualAddress` — self-authenticating address: `dq1` + base32(BLAKE3(ed_pub)[..20])
-- `ContactCard` — shareable public bundle (address + both pubkeys), self-verifying
-- `Lockbox` — anonymous sealed box: ephemeral X25519 ECDH → BLAKE3-KDF → ChaCha20Poly1305. **Sender identity is NOT in the lockbox.**
+## Where it stands
+
+Live status, with evidence for every line, is in **[STATUS.md](STATUS.md)**. In short:
+
+- **Transport:** onion-to-onion over embedded Tor (Arti): live bootstrap, v3 onion service host and dial (`darqual-tor`, `darqual-tor-node`).
+- **Content crypto:** ed25519/x25519 identities, anonymous sealed boxes (ChaCha20-Poly1305), a Double Ratchet with forward secrecy and post-compromise security, and Signal-style header encryption. The node uses persisted ratchet sessions over Tor.
+- **Protocol stages 0–9 built and tested** (ledger, dead-drop addressing, PoW spam gate, erasure-coded storage, VRF committees, forward-secret discovery labels, cover traffic, light client), each tagged `v0.x.0`.
+- **Not done:** the dead-drop layer that hides who-talks-to-whom is not wired into the running node, which still connects directly. Stage 10 (external audit, real beta users) is blocked on things an autonomous build can't do.
+
+Built by Jawz, an AI agent, under Haseeb Khalid's direction.
+
+The quickstart below covers the original Stage 0 CLI (identity, address, sealed box).
 
 ## Quickstart
 
@@ -89,6 +96,8 @@ Lockbox.open(identity, envelope):
 | Recipient anonymity | ✓ no recipient identity in lockbox |
 | AEAD integrity | ✓ any tamper → Err(Decrypt) |
 | Secret key zeroization | ✓ `zeroize` on key bytes |
+| Forward secrecy + post-compromise security | ✓ Double Ratchet (see STATUS.md) |
+| Header privacy | ✓ encrypted headers, trial decryption |
 | Unsafe code | ✗ `#![forbid(unsafe_code)]` |
 
 ## Tests
@@ -112,8 +121,16 @@ cargo test
 darqual/
 ├── Cargo.toml                 # workspace
 ├── crates/
-│   ├── darqual-core/          # Identity, DarqualAddress, ContactCard, Lockbox
-│   └── darqual-cli/           # `darqual` binary
+│   ├── darqual-core/          # identity, address, contact card, lockbox, ratchet, sessions
+│   ├── darqual-cli/           # `darqual` binary
+│   ├── darqual-ledger/        # epochs, Merkle proofs, hash-linked chain
+│   ├── darqual-storage/       # buckets, Reed-Solomon, data-availability sampling
+│   ├── darqual-committee/     # VRF sortition
+│   ├── darqual-cover/         # cover traffic, DP noise
+│   ├── darqual-net/           # networking
+│   ├── darqual-node/          # node
+│   └── darqual-tor/           # Arti/Tor onion transport (outside the gated workspace)
+├── STATUS.md
 ├── SPEC.md
 ├── ROADMAP.md
 └── README.md
@@ -121,5 +138,4 @@ darqual/
 
 ## Roadmap
 
-See `ROADMAP.md`. Stage 1 adds onion transport via Arti (embedded Tor).
-Next: v0.0.2 adds ed25519 signed contact cards, message padding, and property tests.
+See `ROADMAP.md` for the plan and `STATUS.md` for what's done. Next: wire the dead-drop layer into the running node, then hardening toward an external audit.
